@@ -98,8 +98,15 @@ public class VentanaPrincipal extends JFrame {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         panel.setOpaque(false);
         
-        String[] nombresBotones = {"Crear Archivo", "Crear Directorio", "Leer", "Renombrar", "Eliminar", "Estadísticas", "Pausar"};
-        for (String nombre : nombresBotones) {
+        // --- BOTÓN CREAR ARCHIVO CON LÓGICA ---
+        JButton btnCrearArchivo = new JButton("Crear Archivo");
+        styleModernButton(btnCrearArchivo);
+        btnCrearArchivo.addActionListener(e -> accionCrearArchivo()); // <-- Conexión!
+        panel.add(btnCrearArchivo);
+
+        // Los demás botones por ahora solo son visuales
+        String[] otrosBotones = {"Crear Directorio", "Leer", "Renombrar", "Eliminar", "Estadísticas"};
+        for (String nombre : otrosBotones) {
             JButton btn = new JButton(nombre);
             styleModernButton(btn);
             panel.add(btn);
@@ -305,5 +312,83 @@ public class VentanaPrincipal extends JFrame {
             VentanaPrincipal ventana = new VentanaPrincipal();
             ventana.setVisible(true);
         });
+    }
+    // --- LÓGICA DE EVENTOS (ACCIONES) ---
+    private void accionCrearArchivo() {
+        // 1. Pedir datos al usuario con ventanitas (Dialogs)
+        String nombre = JOptionPane.showInputDialog(this, "Ingrese el nombre del archivo (ej. documento.txt):");
+        if (nombre == null || nombre.trim().isEmpty()) return;
+
+        String strTamano = JOptionPane.showInputDialog(this, "Ingrese el tamaño en bloques (ej. 5):");
+        if (strTamano == null || strTamano.trim().isEmpty()) return;
+
+        try {
+            int tamano = Integer.parseInt(strTamano);
+            
+            // 2. Llamar al Gestor (Cerebro)
+            boolean exito = gestor.crearArchivo(nombre, tamano, "admin");
+            
+            if (exito) {
+                JOptionPane.showMessageDialog(this, "Archivo creado con éxito.", "Éxito", JOptionPane.INFORMATION_MESSAGE);
+                areaLog.append("Archivo creado: " + nombre + " (" + tamano + " bloques)\n");
+                actualizarPantallaCompleta(); // 3. Refrescar los dibujos
+            } else {
+                JOptionPane.showMessageDialog(this, "No hay espacio suficiente en el disco.", "Error", JOptionPane.ERROR_MESSAGE);
+            }
+        } catch (NumberFormatException ex) {
+            JOptionPane.showMessageDialog(this, "El tamaño debe ser un número entero.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    // Este método vuelve a dibujar el disco y la tabla para mostrar los cambios
+    private void actualizarPantallaCompleta() {
+        // --- 1. Refrescar Mapa de Disco ---
+        panelDiscoBlocks.removeAll();
+        modelo.Bloque[] bloquesReales = gestor.getDisco().getBloques();
+        for (int i = 0; i < gestor.getDisco().getCapacidad(); i++) {
+            JPanel block = new JPanel();
+            // Pintar de color acento (azul) si está ocupado, gris si está libre
+            block.setBackground(bloquesReales[i].isLibre() ? Color.GRAY : COLOR_ACCENTO); 
+            block.setBorder(BorderFactory.createLineBorder(COLOR_FONDO, 1));
+            
+            JLabel lblId = new JLabel(String.valueOf(i));
+            lblId.setFont(new Font("Arial", Font.PLAIN, 10));
+            lblId.setForeground(Color.BLACK);
+            block.add(lblId);
+            panelDiscoBlocks.add(block);
+        }
+        panelDiscoBlocks.revalidate();
+        panelDiscoBlocks.repaint();
+
+        // --- 2. Refrescar Tabla de Asignación ---
+        modeloTabla.setRowCount(0); // Limpiar tabla vieja
+        
+        modelo.Directorio raiz = gestor.getDirectorioRaiz();
+        estructuras.ListaEnlazada<modelo.Archivo> archivos = raiz.getArchivos();
+        
+        // Recorremos tu ListaEnlazada usando tus métodos
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            modelo.Archivo arch = archivos.obtener(i);
+            // Agregamos una fila a la tabla por cada archivo
+            modeloTabla.addRow(new Object[]{
+                arch.getNombre(), 
+                arch.getPropietario(), 
+                arch.getTamañoEnBloques(), 
+                arch.getBloqueInicial()
+            });
+        }
+
+        // --- 3. Refrescar Árbol de Directorios (JTree) ---
+        DefaultMutableTreeNode raizNode = (DefaultMutableTreeNode) arbolDirectorios.getModel().getRoot();
+        raizNode.removeAllChildren(); // Limpiar archivos viejos del árbol
+        
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            modelo.Archivo arch = archivos.obtener(i);
+            // Agregamos un "hijo" a la carpeta raíz por cada archivo
+            raizNode.add(new DefaultMutableTreeNode(arch.getNombre() + " [" + arch.getTamañoEnBloques() + " blk]"));
+        }
+        
+        // Avisarle al árbol que sus datos cambiaron para que se redibuje
+        ((DefaultTreeModel) arbolDirectorios.getModel()).reload();
     }
 }
