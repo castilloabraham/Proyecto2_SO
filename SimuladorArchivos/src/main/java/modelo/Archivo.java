@@ -1,29 +1,21 @@
 package modelo;
 
-import estructuras.ListaEnlazada;
-
 public class Archivo {
     private String nombre;
-    private String dueno;
-    private int tamanoBloques;
-    // Aquí cumplimos con la asignación encadenada usando tu propia estructura
-    private ListaEnlazada<Bloque> bloquesAsignados; 
+    private int tamañoEnBloques;
+    private int bloqueInicial;
+    private String propietario; // Para la tabla
 
-    public Archivo(String nombre, String dueno, int tamanoBloques) {
+    public Archivo(String nombre, int tamañoEnBloques, int bloqueInicial, String propietario) {
         this.nombre = nombre;
-        this.dueno = dueno;
-        this.tamanoBloques = tamanoBloques;
-        this.bloquesAsignados = new ListaEnlazada<>();
+        this.tamañoEnBloques = tamañoEnBloques;
+        this.bloqueInicial = bloqueInicial;
+        this.propietario = propietario;
     }
 
-    // Getters y Setters básicos
+    // Getters
     public String getNombre() { return nombre; }
-    public void setNombre(String nombre) { this.nombre = nombre; }
-
-    public String getDueno() { return dueno; }
-    public void setDueno(String dueno) { this.dueno = dueno; }
-
-    public int getTamanoBloques() { return tamanoBloques; }
-
-    public ListaEnlazada<Bloque> getBloquesAsignados() { return bloquesAsignados; }
+    public int getTamañoEnBloques() { return tamañoEnBloques; }
+    public int getBloqueInicial() { return bloqueInicial; }
+    public String getPropietario() { return propietario; }
 }
