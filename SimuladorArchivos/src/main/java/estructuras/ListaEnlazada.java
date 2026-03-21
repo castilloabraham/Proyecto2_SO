@@ -41,4 +41,21 @@ public class ListaEnlazada<T> {
     public int getTamano() {
         return tamano;
     }
+    
+    public void eliminar(int index) {
+        if (index < 0 || index >= tamano) return; // Si el índice no existe, no hace nada
+
+        if (index == 0) {
+            cabeza = cabeza.getSiguiente(); // Si es el primero, la cabeza salta al segundo
+        } else {
+            Nodo<T> actual = cabeza;
+            // Buscamos el nodo ANTERIOR al que queremos borrar
+            for (int i = 0; i < index - 1; i++) {
+                actual = actual.getSiguiente();
+            }
+            // Saltamos el nodo que queremos borrar
+            actual.setSiguiente(actual.getSiguiente().getSiguiente());
+        }
+        tamano--;
+    }
 }
