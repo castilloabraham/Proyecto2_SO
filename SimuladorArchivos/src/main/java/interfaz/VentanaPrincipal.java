@@ -1,5 +1,9 @@
 package interfaz;
 
+import controlador.GestorArchivos;
+import modelo.Bloque;
+import modelo.Disco;
+
 import javax.swing.*;
 import javax.swing.border.Border;
 import javax.swing.border.TitledBorder;
@@ -11,13 +15,16 @@ import java.awt.*;
 public class VentanaPrincipal extends JFrame {
 
     // --- Colores Modernos para el Estilo ---
-    private final Color COLOR_FONDO = new Color(45, 50, 60); // Gris oscuro azulado
-    private final Color COLOR_PANEL = new Color(55, 60, 70);  // Un poco más claro para los paneles
+    private final Color COLOR_FONDO = new Color(45, 50, 60);
+    private final Color COLOR_PANEL = new Color(55, 60, 70); 
     private final Color COLOR_TEXTO = Color.WHITE;
-    private final Color COLOR_ACCENTO = new Color(100, 180, 240); // Azul claro
+    private final Color COLOR_ACCENTO = new Color(100, 180, 240);
     private final Font FUENTE_TITULO = new Font("Arial", Font.BOLD, 14);
 
-    // --- Componentes para guardar referencias más adelante ---
+    // --- EL CEREBRO DE LA APLICACIÓN ---
+    private GestorArchivos gestor;
+
+    // --- Componentes visuales ---
     private JTree arbolDirectorios;
     private JTable tablaArchivos;
     private DefaultTableModel modeloTabla;
@@ -28,25 +35,28 @@ public class VentanaPrincipal extends JFrame {
 
     public VentanaPrincipal() {
         super("Simulador de Sistema de Archivos OS - [MODERNO]");
-        setSize(1300, 900); // Un tamaño amplio para que quepa todo
+        
+        // 1. INICIALIZAMOS EL CONTROLADOR (El cerebro)
+        this.gestor = new GestorArchivos();
+
+        setSize(1300, 900);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLocationRelativeTo(null);
         getContentPane().setBackground(COLOR_FONDO);
-        setLayout(new BorderLayout(5, 5)); // BorderLayout principal con espacios
+        setLayout(new BorderLayout(5, 5));
 
         // --- Inicialización Modular de Secciones ---
-        add(crearPanelControles(), BorderLayout.NORTH); // 1. Sección de Controles (Arriba)
+        add(crearPanelControles(), BorderLayout.NORTH); 
         
         JPanel panelCentralYBottom = new JPanel(new BorderLayout(5, 5));
         panelCentralYBottom.setOpaque(false);
-        panelCentralYBottom.add(crearPanelSistemaArchivos(), BorderLayout.WEST); // 2. Explorador de Archivos (Centro-Izquierda)
-        panelCentralYBottom.add(crearPanelTabsCentrales(), BorderLayout.CENTER);   // 3. Tabs con Disco/Tabla (Centro)
-        panelCentralYBottom.add(crearPanelLogsProcesos(), BorderLayout.SOUTH);   // 4. Logs y Procesos (Abajo)
+        panelCentralYBottom.add(crearPanelSistemaArchivos(), BorderLayout.WEST); 
+        panelCentralYBottom.add(crearPanelTabsCentrales(), BorderLayout.CENTER);   
+        panelCentralYBottom.add(crearPanelLogsProcesos(), BorderLayout.SOUTH);   
         
         add(panelCentralYBottom, BorderLayout.CENTER);
     }
 
-    /** 1. Sección de Controles (Arriba) **/
     private JPanel crearPanelControles() {
         JPanel panelControles = crearPanelBase("Controles");
         panelControles.setLayout(new GridBagLayout());
@@ -54,15 +64,13 @@ public class VentanaPrincipal extends JFrame {
         gbc.insets = new Insets(5, 10, 5, 10);
         gbc.fill = GridBagConstraints.BOTH;
 
-        // Fila 1: Modo, Planificador, Botones de Acción
         gbc.gridx = 0; gbc.gridy = 0;
         panelControles.add(crearSeccionModoPlanificador(), gbc);
         
         gbc.gridx = 1;
         panelControles.add(crearSeccionBotonesAccion(), gbc);
 
-        // Fila 2: Velocidad, Status
-        gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 2; // Ocupa ambas columnas
+        gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 2;
         panelControles.add(crearSeccionVelocidadStatus(), gbc);
         
         return panelControles;
@@ -72,14 +80,12 @@ public class VentanaPrincipal extends JFrame {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
         panel.setOpaque(false);
         
-        // Modo
         panel.add(new JLabel("Modo:", JLabel.LEFT) {{ setForeground(COLOR_TEXTO); }});
         JRadioButton rbAdmin = new JRadioButton("Administrador", true) {{ setForeground(COLOR_TEXTO); setOpaque(false); }};
         JRadioButton rbUsuario = new JRadioButton("Usuario") {{ setForeground(COLOR_TEXTO); setOpaque(false); }};
         ButtonGroup bgModo = new ButtonGroup(); bgModo.add(rbAdmin); bgModo.add(rbUsuario);
         panel.add(rbAdmin); panel.add(rbUsuario);
 
-        // Planificador
         panel.add(new JLabel("Planificador:", JLabel.LEFT) {{ setForeground(COLOR_TEXTO); }});
         String[] algos = {"FIFO", "SSTF", "SCAN", "C-SCAN"};
         JComboBox<String> comboAlgo = new JComboBox<>(algos);
@@ -95,7 +101,7 @@ public class VentanaPrincipal extends JFrame {
         String[] nombresBotones = {"Crear Archivo", "Crear Directorio", "Leer", "Renombrar", "Eliminar", "Estadísticas", "Pausar"};
         for (String nombre : nombresBotones) {
             JButton btn = new JButton(nombre);
-            styleModernButton(btn); // Le damos estilo moderno
+            styleModernButton(btn);
             panel.add(btn);
         }
         return panel;
@@ -105,7 +111,6 @@ public class VentanaPrincipal extends JFrame {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 15, 0));
         panel.setOpaque(false);
         
-        // Velocidad con slider
         panel.add(new JLabel("Velocidad:", JLabel.LEFT) {{ setForeground(COLOR_TEXTO); }});
         sliderVelocidad = new JSlider(0, 100, 50);
         sliderVelocidad.setOpaque(false);
@@ -113,45 +118,36 @@ public class VentanaPrincipal extends JFrame {
         panel.add(sliderVelocidad);
         panel.add(new JLabel("300 ms (Normal)") {{ setForeground(COLOR_TEXTO); }});
 
-        // Status Labels
-        panel.add(new JLabel("   Ciclo: 917") {{ setForeground(COLOR_TEXTO); }});
-        panel.add(new JLabel("   Cabeza: 8") {{ setForeground(COLOR_TEXTO); }});
+        panel.add(new JLabel("   Ciclo: 0") {{ setForeground(COLOR_TEXTO); }});
+        panel.add(new JLabel("   Cabeza: 0") {{ setForeground(COLOR_TEXTO); }});
         
         return panel;
     }
 
-    /** 2. Explorador de Archivos (Centro-Izquierda) **/
     private JPanel crearPanelSistemaArchivos() {
         JPanel panel = crearPanelBase("Sistema de Archivos");
-        panel.setPreferredSize(new Dimension(300, 0)); // Ancho fijo
+        panel.setPreferredSize(new Dimension(300, 0));
         panel.setLayout(new BorderLayout());
 
-        // Creamos un árbol de ejemplo rápido
-        DefaultMutableTreeNode raizNode = new DefaultMutableTreeNode("raíz");
-        DefaultMutableTreeNode docNode = new DefaultMutableTreeNode("documentos");
-        docNode.add(new DefaultMutableTreeNode("informe1 [5 bloques]"));
-        docNode.add(new DefaultMutableTreeNode("nota [2 bloques]"));
-        raizNode.add(docNode);
-        raizNode.add(new DefaultMutableTreeNode("imágenes"));
-        raizNode.add(new DefaultMutableTreeNode("proyectos"));
+        // 2. CONECTAMOS EL ÁRBOL CON LA CARPETA REAL DEL GESTOR
+        String nombreRaiz = gestor.getDirectorioRaiz().getNombre();
+        DefaultMutableTreeNode raizNode = new DefaultMutableTreeNode(nombreRaiz);
 
         arbolDirectorios = new JTree(new DefaultTreeModel(raizNode));
-        arbolDirectorios.setBackground(COLOR_PANEL); // Fondo del panel
-        arbolDirectorios.setForeground(COLOR_TEXTO); // Texto
+        arbolDirectorios.setBackground(COLOR_PANEL);
+        arbolDirectorios.setForeground(COLOR_TEXTO);
         
-        // Un poco de estilo para el JTree
         JScrollPane scroll = new JScrollPane(arbolDirectorios);
-        scroll.setBorder(null); // Sin borde para el scroll interno
+        scroll.setBorder(null);
         panel.add(scroll, BorderLayout.CENTER);
         
         return panel;
     }
 
-    /** 3. Tabs con Disco/Tabla (Centro) **/
     private JTabbedPane crearPanelTabsCentrales() {
         JTabbedPane tabs = new JTabbedPane();
         tabs.setOpaque(false);
-        styleModernTabs(tabs); // Estilo moderno para los tabs
+        styleModernTabs(tabs);
 
         tabs.addTab("Simulación de Disco", crearPanelDiscoMap());
         tabs.addTab("Tabla de Asignación", crearPanelTablaAsignacion());
@@ -165,33 +161,31 @@ public class VentanaPrincipal extends JFrame {
         panel.setOpaque(false);
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // El mapa del disco con GridLayout (ej. 10x10 = 100 bloques)
-        int rows = 10, cols = 10;
-        panelDiscoBlocks = new JPanel(new GridLayout(rows, cols, 3, 3)); // 3px gap
+        // 3. CONECTAMOS EL MAPA DEL DISCO CON LOS BLOQUES REALES DEL GESTOR
+        Disco discoReal = gestor.getDisco();
+        int totalBloques = discoReal.getCapacidad();
+        Bloque[] bloquesReales = discoReal.getBloques();
+
+        int cols = 10;
+        int rows = (int) Math.ceil((double) totalBloques / cols);
+        
+        panelDiscoBlocks = new JPanel(new GridLayout(rows, cols, 3, 3));
         panelDiscoBlocks.setOpaque(false);
         
-        // Creamos bloques de ejemplo como en la imagen
-        Color[] coloresEjemplo = {
-            Color.RED, Color.GREEN, Color.BLUE, new Color(150, 50, 200), // Púrpura
-            Color.YELLOW, Color.CYAN, Color.ORANGE, Color.GRAY // Libres
-        };
-        
-        for (int i = 0; i < (rows * cols); i++) {
+        // Dibujamos cada bloque real
+        for (int i = 0; i < totalBloques; i++) {
             JPanel block = new JPanel();
-            Color colorB;
-            if (i < 4) colorB = coloresEjemplo[0]; // Rojo
-            else if (i < 10) colorB = coloresEjemplo[1]; // Verde
-            else if (i < 20) colorB = coloresEjemplo[2]; // Azul
-            else if (i < 30) colorB = coloresEjemplo[3]; // Púrpura
-            else if (i < 40) colorB = coloresEjemplo[4]; // Amarillo
-            else if (i < 50) colorB = coloresEjemplo[5]; // Cyan
-            else if (i < 60) colorB = coloresEjemplo[6]; // Naranja
-            else colorB = coloresEjemplo[7]; // Libres (Gris)
             
-            block.setBackground(colorB);
-            block.setBorder(BorderFactory.createLineBorder(COLOR_FONDO, 1)); // Borde limpio
+            // Si el bloque está libre lo pintamos gris, sino rojo (por ahora)
+            if (bloquesReales[i].isLibre()) {
+                block.setBackground(Color.GRAY);
+            } else {
+                block.setBackground(Color.RED); 
+            }
             
-            JLabel lblId = new JLabel(String.valueOf(i));
+            block.setBorder(BorderFactory.createLineBorder(COLOR_FONDO, 1));
+            
+            JLabel lblId = new JLabel(String.valueOf(bloquesReales[i].getId()));
             lblId.setFont(new Font("Arial", Font.PLAIN, 10));
             lblId.setForeground(Color.BLACK);
             block.add(lblId);
@@ -199,17 +193,16 @@ public class VentanaPrincipal extends JFrame {
             panelDiscoBlocks.add(block);
         }
         
-        // Envolvemos el mapa en un ScrollPane por si el disco es grande
         JScrollPane scrollDisco = new JScrollPane(panelDiscoBlocks);
         scrollDisco.setOpaque(false);
         scrollDisco.getViewport().setOpaque(false);
         scrollDisco.setBorder(null);
         panel.add(scrollDisco, BorderLayout.CENTER);
 
-        // Status abajo del disco
+        // Mostramos el espacio libre real
         JPanel panelStatus = new JPanel(new FlowLayout(FlowLayout.LEFT));
         panelStatus.setOpaque(false);
-        panelStatus.add(new JLabel("Bloques libres: 83/100") {{ setForeground(COLOR_TEXTO); }});
+        panelStatus.add(new JLabel("Bloques libres: " + discoReal.obtenerEspacioLibre() + "/" + totalBloques) {{ setForeground(COLOR_TEXTO); }});
         panel.add(panelStatus, BorderLayout.SOUTH);
 
         return panel;
@@ -220,15 +213,10 @@ public class VentanaPrincipal extends JFrame {
         panel.setOpaque(false);
         panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
 
-        // Modelo de la tabla como en el documento
         String[] columnas = {"Nombre del Archivo", "Dueño", "Tamaño (Bloques)", "Bloque Inicial"};
         modeloTabla = new DefaultTableModel(null, columnas);
         tablaArchivos = new JTable(modeloTabla);
-        styleModernTable(tablaArchivos); // Estilo moderno
-
-        // Datos de ejemplo rápido
-        modeloTabla.addRow(new Object[]{"informe1.txt", "admin", "5", "0"});
-        modeloTabla.addRow(new Object[]{"nota.pdf", "usuario1", "2", "4"});
+        styleModernTable(tablaArchivos);
 
         panel.add(new JScrollPane(tablaArchivos), BorderLayout.CENTER);
         return panel;
@@ -241,18 +229,15 @@ public class VentanaPrincipal extends JFrame {
         return panel;
     }
 
-    /** 4. Logs y Procesos (Abajo) **/
     private JPanel crearPanelLogsProcesos() {
-        JPanel panelLogsProcesos = new JPanel(new GridLayout(1, 2, 5, 0)); // 2 columnas, espacios
+        JPanel panelLogsProcesos = new JPanel(new GridLayout(1, 2, 5, 0));
         panelLogsProcesos.setOpaque(false);
-        panelLogsProcesos.setPreferredSize(new Dimension(0, 250)); // Altura fija
+        panelLogsProcesos.setPreferredSize(new Dimension(0, 250));
 
-        // Log de Eventos
         JPanel panelLog = crearPanelBase("Log de Eventos");
         panelLog.setLayout(new BorderLayout());
         areaLog = crearTextAreaModerna();
-        areaLog.append("[Ciclo 917] I/O Completada: RENOMBRAR notas.txt -> nota (Bloque 0)\n");
-        areaLog.append("[Ciclo 917] Proceso terminado: Proc-15-ACTUALIZAR_ARCHIVO\n");
+        areaLog.append("Sistema iniciado correctamente...\n");
         panelLog.add(new JScrollPane(areaLog), BorderLayout.CENTER);
         
         JButton btnLimpiarLog = new JButton("Limpiar Log");
@@ -260,7 +245,6 @@ public class VentanaPrincipal extends JFrame {
         panelLog.add(new JPanel(new FlowLayout(FlowLayout.RIGHT)) {{ setOpaque(false); add(btnLimpiarLog); }}, BorderLayout.SOUTH);
         panelLogsProcesos.add(panelLog);
 
-        // Cola de Procesos
         JPanel panelProcesos = crearPanelBase("Cola de Procesos");
         panelProcesos.setLayout(new BorderLayout());
         areaProcesos = crearTextAreaModerna();
@@ -271,12 +255,10 @@ public class VentanaPrincipal extends JFrame {
         return panelLogsProcesos;
     }
 
-    // --- MÉTODOS DE AYUDA PARA ESTILOS ---
-
     private JPanel crearPanelBase(String titulo) {
         JPanel panel = new JPanel();
         panel.setBackground(COLOR_PANEL);
-        Border baseBorder = BorderFactory.createLineBorder(COLOR_FONDO, 2, true); // Borde redondeado sutil
+        Border baseBorder = BorderFactory.createLineBorder(COLOR_FONDO, 2, true);
         TitledBorder titleBorder = BorderFactory.createTitledBorder(baseBorder, titulo);
         titleBorder.setTitleFont(FUENTE_TITULO);
         titleBorder.setTitleColor(COLOR_TEXTO);
@@ -286,8 +268,8 @@ public class VentanaPrincipal extends JFrame {
 
     private JTextArea crearTextAreaModerna() {
         JTextArea area = new JTextArea();
-        area.setBackground(COLOR_PANEL); // Fondo del panel
-        area.setForeground(new Color(200, 200, 200)); // Texto claro pero no blanco puro
+        area.setBackground(COLOR_PANEL);
+        area.setForeground(new Color(200, 200, 200));
         area.setFont(new Font("Monospaced", Font.PLAIN, 12));
         area.setEditable(false);
         return area;
@@ -295,10 +277,10 @@ public class VentanaPrincipal extends JFrame {
 
     private void styleModernButton(JButton btn) {
         btn.setBackground(COLOR_ACCENTO);
-        btn.setForeground(Color.BLACK); // Texto oscuro sobre claro
+        btn.setForeground(Color.BLACK);
         btn.setFont(new Font("Arial", Font.BOLD, 12));
         btn.setFocusPainted(false);
-        btn.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10)); // Espaciado interno
+        btn.setBorder(BorderFactory.createEmptyBorder(5, 10, 5, 10));
     }
 
     private void styleModernTabs(JTabbedPane tabs) {
@@ -306,7 +288,7 @@ public class VentanaPrincipal extends JFrame {
         UIManager.put("TabbedPane.foreground", COLOR_TEXTO);
         UIManager.put("TabbedPane.selected", COLOR_PANEL);
         UIManager.put("TabbedPane.contentAreaColor", COLOR_PANEL);
-        tabs.updateUI(); // Forzar actualización de estilos
+        tabs.updateUI();
     }
 
     private void styleModernTable(JTable table) {
@@ -318,7 +300,6 @@ public class VentanaPrincipal extends JFrame {
         table.getTableHeader().setFont(FUENTE_TITULO);
     }
 
-    // Método principal para arrancar y probar
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             VentanaPrincipal ventana = new VentanaPrincipal();
