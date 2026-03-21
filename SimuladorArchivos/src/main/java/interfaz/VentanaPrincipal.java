@@ -110,7 +110,13 @@ public class VentanaPrincipal extends JFrame {
         panel.add(btnEliminar);
 
         // Los demás botones visuales
-        String[] otrosBotones = {"Crear Directorio", "Leer", "Renombrar", "Estadísticas"};
+        JButton btnCrearDirectorio = new JButton("Crear Directorio");
+        styleModernButton(btnCrearDirectorio);
+        btnCrearDirectorio.addActionListener(e -> accionCrearDirectorio()); // ¡Conectado!
+        panel.add(btnCrearDirectorio);
+
+        // Los demás botones visuales que nos faltan
+        String[] otrosBotones = {"Leer", "Renombrar", "Estadísticas"};
         for (String nombre : otrosBotones) {
             JButton btn = new JButton(nombre);
             styleModernButton(btn);
@@ -385,16 +391,27 @@ public class VentanaPrincipal extends JFrame {
 
         // --- 3. Refrescar Árbol de Directorios (JTree) ---
         DefaultMutableTreeNode raizNode = (DefaultMutableTreeNode) arbolDirectorios.getModel().getRoot();
-        raizNode.removeAllChildren(); // Limpiar archivos viejos del árbol
+        raizNode.removeAllChildren(); // Limpiar viejo
         
+        // 3.1 Primero agregamos las subcarpetas al árbol
+        estructuras.ListaEnlazada<modelo.Directorio> subdirs = raiz.getSubdirectorios();
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            modelo.Directorio dir = subdirs.obtener(i);
+            raizNode.add(new DefaultMutableTreeNode("📁 " + dir.getNombre())); // Ícono de carpeta
+        }
+
+        // 3.2 Luego agregamos los archivos al árbol
         for (int i = 0; i < archivos.getTamano(); i++) {
             modelo.Archivo arch = archivos.obtener(i);
-            // Agregamos un "hijo" a la carpeta raíz por cada archivo
-            raizNode.add(new DefaultMutableTreeNode(arch.getNombre() + " [" + arch.getTamañoEnBloques() + " blk]"));
+            raizNode.add(new DefaultMutableTreeNode("📄 " + arch.getNombre() + " [" + arch.getTamañoEnBloques() + " blk]")); // Ícono de archivo
         }
         
-        // Avisarle al árbol que sus datos cambiaron para que se redibuje
         ((DefaultTreeModel) arbolDirectorios.getModel()).reload();
+        
+        // Expandir el árbol automáticamente para que siempre se vea lo que agregamos
+        for (int i = 0; i < arbolDirectorios.getRowCount(); i++) {
+            arbolDirectorios.expandRow(i);
+        }
     }
     
     private void accionEliminarArchivo() {
@@ -413,5 +430,14 @@ public class VentanaPrincipal extends JFrame {
         } else {
             JOptionPane.showMessageDialog(this, "No se encontró el archivo '" + nombre + "'.", "Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+    
+    private void accionCrearDirectorio() {
+        String nombre = JOptionPane.showInputDialog(this, "Ingrese el nombre de la nueva carpeta:");
+        if (nombre == null || nombre.trim().isEmpty()) return;
+
+        gestor.crearDirectorio(nombre);
+        areaLog.append("Directorio creado: " + nombre + "\n");
+        actualizarPantallaCompleta();
     }
 }

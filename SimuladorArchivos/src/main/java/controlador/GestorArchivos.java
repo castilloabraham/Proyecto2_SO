@@ -81,4 +81,11 @@ public class GestorArchivos {
         }
         return false; // No se encontró el archivo
     }
+    
+    public boolean crearDirectorio(String nombre) {
+        // Por ahora, crearemos las carpetas directamente dentro de "raiz"
+        Directorio nuevoDir = new Directorio(nombre);
+        directorioRaiz.agregarSubdirectorio(nuevoDir);
+        return true;
+    }
 }
