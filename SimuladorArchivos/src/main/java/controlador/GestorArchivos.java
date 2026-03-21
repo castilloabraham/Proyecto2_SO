@@ -51,4 +51,34 @@ public class GestorArchivos {
 
         return true; // Éxito
     }
+    
+    public boolean eliminarArchivo(String nombre) {
+        estructuras.ListaEnlazada<modelo.Archivo> archivos = directorioRaiz.getArchivos();
+        
+        // 1. Buscamos el archivo por su nombre en la lista
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            modelo.Archivo arch = archivos.obtener(i);
+            
+            if (arch.getNombre().equals(nombre)) {
+                // 2. Liberamos los bloques en el disco (volverlos a gris)
+                Bloque[] bloquesReales = disco.getBloques();
+                int inicio = arch.getBloqueInicial();
+                int tamano = arch.getTamañoEnBloques();
+                
+                // Recorremos los bloques que ocupaba y los marcamos como libres
+                int bloquesLiberados = 0;
+                for (int j = inicio; bloquesLiberados < tamano && j < disco.getCapacidad(); j++) {
+                    if (!bloquesReales[j].isLibre()) {
+                        bloquesReales[j].setLibre(true);
+                        bloquesLiberados++;
+                    }
+                }
+                
+                // 3. Lo borramos de la carpeta (nuestra ListaEnlazada)
+                archivos.eliminar(i);
+                return true; // Éxito
+            }
+        }
+        return false; // No se encontró el archivo
+    }
 }
