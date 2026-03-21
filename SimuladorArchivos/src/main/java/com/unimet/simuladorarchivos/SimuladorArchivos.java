@@ -1,15 +1,18 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- */
 package com.unimet.simuladorarchivos;
+import interfaz.VentanaPrincipal; 
+import javax.swing.SwingUtilities;
 
-/**
- *
- * @author chris
- */
 public class SimuladorArchivos {
 
     public static void main(String[] args) {
-        System.out.println("Hello World!");
+        // 2. Le decimos a Java que abra nuestra ventana gráfica de forma segura
+        SwingUtilities.invokeLater(new Runnable() {
+            @Override
+            public void run() {
+                // Creamos la ventana y la hacemos visible
+                VentanaPrincipal ventana = new VentanaPrincipal();
+                ventana.setVisible(true);
+            }
+        });
     }
 }
