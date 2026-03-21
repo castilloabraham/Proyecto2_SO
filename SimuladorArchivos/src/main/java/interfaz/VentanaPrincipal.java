@@ -342,12 +342,13 @@ public class VentanaPrincipal extends JFrame {
 
     // Este método vuelve a dibujar el disco y la tabla para mostrar los cambios
     private void actualizarPantallaCompleta() {
-        // Refrescar Mapa de Disco
+        // --- 1. Refrescar Mapa de Disco ---
         panelDiscoBlocks.removeAll();
-        Bloque[] bloquesReales = gestor.getDisco().getBloques();
+        modelo.Bloque[] bloquesReales = gestor.getDisco().getBloques();
         for (int i = 0; i < gestor.getDisco().getCapacidad(); i++) {
             JPanel block = new JPanel();
-            block.setBackground(bloquesReales[i].isLibre() ? Color.GRAY : COLOR_ACCENTO); // Azul si está ocupado
+            // Pintar de color acento (azul) si está ocupado, gris si está libre
+            block.setBackground(bloquesReales[i].isLibre() ? Color.GRAY : COLOR_ACCENTO); 
             block.setBorder(BorderFactory.createLineBorder(COLOR_FONDO, 1));
             
             JLabel lblId = new JLabel(String.valueOf(i));
@@ -359,11 +360,35 @@ public class VentanaPrincipal extends JFrame {
         panelDiscoBlocks.revalidate();
         panelDiscoBlocks.repaint();
 
-        // Refrescar Tabla de Asignación
-        modeloTabla.setRowCount(0); // Limpiar tabla
-        // Como tu ListaEnlazada no se puede iterar con un "for normal" fácilmente, 
-        // simularemos la lectura de la carpeta raíz
-        modeloTabla.addRow(new Object[]{"Actualice su método", "admin", "X", "X"}); 
-        // En el próximo paso conectaremos tu ListaEnlazada a la tabla para que lea los datos reales.
+        // --- 2. Refrescar Tabla de Asignación ---
+        modeloTabla.setRowCount(0); // Limpiar tabla vieja
+        
+        modelo.Directorio raiz = gestor.getDirectorioRaiz();
+        estructuras.ListaEnlazada<modelo.Archivo> archivos = raiz.getArchivos();
+        
+        // Recorremos tu ListaEnlazada usando tus métodos
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            modelo.Archivo arch = archivos.obtener(i);
+            // Agregamos una fila a la tabla por cada archivo
+            modeloTabla.addRow(new Object[]{
+                arch.getNombre(), 
+                arch.getPropietario(), 
+                arch.getTamañoEnBloques(), 
+                arch.getBloqueInicial()
+            });
+        }
+
+        // --- 3. Refrescar Árbol de Directorios (JTree) ---
+        DefaultMutableTreeNode raizNode = (DefaultMutableTreeNode) arbolDirectorios.getModel().getRoot();
+        raizNode.removeAllChildren(); // Limpiar archivos viejos del árbol
+        
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            modelo.Archivo arch = archivos.obtener(i);
+            // Agregamos un "hijo" a la carpeta raíz por cada archivo
+            raizNode.add(new DefaultMutableTreeNode(arch.getNombre() + " [" + arch.getTamañoEnBloques() + " blk]"));
+        }
+        
+        // Avisarle al árbol que sus datos cambiaron para que se redibuje
+        ((DefaultTreeModel) arbolDirectorios.getModel()).reload();
     }
 }
