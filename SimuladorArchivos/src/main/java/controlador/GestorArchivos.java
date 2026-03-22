@@ -15,12 +15,10 @@ public class GestorArchivos {
         this.directorioRaiz = new Directorio("raiz");
     }
 
-    // MÉTODOS EXISTENTES
     public Disco getDisco() { return disco; }
     public Directorio getDirectorioRaiz() { return directorioRaiz; }
     private int posicionCabeza = 0; // La aguja siempre empieza en el bloque 0
 
-    // --- NUEVO: LÓGICA PARA CREAR ARCHIVO ---
     // Retorna true si se pudo crear, false si no hay espacio
     public boolean crearArchivo(String nombre, int tamaño, String propietario) {
         // 1. Verificar si hay espacio suficiente
@@ -38,7 +36,11 @@ public class GestorArchivos {
                 if (bloquesAsignados == 0) {
                     primerBloque = i; // Guardamos dónde empieza el archivo
                 }
+                
                 bloquesReales[i].setLibre(false); // Lo marcamos como ocupado
+                bloquesReales[i].setArchivoAsignado(nombre); // Le damos el nombre para el tooltip
+                bloquesReales[i].setContenido("Datos de: " + nombre); 
+                
                 bloquesAsignados++;
             }
             if (bloquesAsignados == tamaño) {
@@ -71,6 +73,8 @@ public class GestorArchivos {
                 for (int j = inicio; bloquesLiberados < tamano && j < disco.getCapacidad(); j++) {
                     if (!bloquesReales[j].isLibre()) {
                         bloquesReales[j].setLibre(true);
+                        bloquesReales[j].setArchivoAsignado("Ninguno"); // Borramos el nombre para el tooltip
+                        bloquesReales[j].setContenido("");
                         bloquesLiberados++;
                     }
                 }
