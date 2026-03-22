@@ -37,7 +37,7 @@ public class Planificador extends Thread {
 
                     // --- INICIO DE LA LÓGICA DE POLÍTICAS ---
                     if (politicaActual.equals("FIFO")) {
-                        // FIFO: Saca el primero de la fila (El clásico)
+                        // FIFO: Saca el primero de la fila
                         procesoActual = cola.desencolar(); 
                         
                     } else if (politicaActual.equals("SSTF")) {
@@ -45,37 +45,33 @@ public class Planificador extends Thread {
                         int size = cola.getTamano();
                         int minDistancia = Integer.MAX_VALUE;
 
-                        // 1era Vuelta: Revisamos todos para ver cuál es el más cercano
                         for (int i = 0; i < size; i++) {
                             Proceso p = cola.desencolar();
                             int distancia = Math.abs(p.getBloqueDestino() - posicionActual);
                             
                             if (distancia < minDistancia) {
                                 minDistancia = distancia;
-                                procesoActual = p; // Guardamos al ganador
+                                procesoActual = p;
                             }
-                            cola.encolar(p); // Lo regresamos a la cola temporalmente
+                            cola.encolar(p); 
                         }
 
-                        // 2da Vuelta: Sacamos al ganador definitivo de la cola
                         for (int i = 0; i < size; i++) {
                             Proceso p = cola.desencolar();
                             if (p != procesoActual) {
-                                cola.encolar(p); // Si no es el ganador, sigue haciendo fila
+                                cola.encolar(p); 
                             }
                         }
                         
                     } else if (politicaActual.equals("SCAN")) {
-                        // --- INICIO ALGORITMO SCAN (Ascensor) ---
+                        // SCAN: Ascensor con reversa
                         int size = cola.getTamano();
                         int minDistancia = Integer.MAX_VALUE;
                         
-                        // 1era Vuelta: Buscar el más cercano EN LA DIRECCIÓN ACTUAL
                         for (int i = 0; i < size; i++) {
                             Proceso p = cola.desencolar();
                             int destino = p.getBloqueDestino();
                             
-                            // ¿Está en nuestro camino?
                             boolean enCamino = (moviendoDerecha && destino >= posicionActual) || 
                                                (!moviendoDerecha && destino <= posicionActual);
                             
@@ -83,16 +79,14 @@ public class Planificador extends Thread {
                                 int distancia = Math.abs(destino - posicionActual);
                                 if (distancia < minDistancia) {
                                     minDistancia = distancia;
-                                    procesoActual = p; // Tenemos un candidato en nuestra dirección
+                                    procesoActual = p; 
                                 }
                             }
-                            cola.encolar(p); // Regresa a la fila temporalmente
+                            cola.encolar(p); 
                         }
                         
-                        // 2da Vuelta (Solo si es necesario): Si no encontramos a nadie en nuestro camino, 
-                        // el ascensor CAMBIA DE DIRECCIÓN y busca de nuevo.
                         if (procesoActual == null) {
-                            moviendoDerecha = !moviendoDerecha; // ¡Metemos reversa!
+                            moviendoDerecha = !moviendoDerecha; // Reversa
                             minDistancia = Integer.MAX_VALUE;
                             
                             for (int i = 0; i < size; i++) {
@@ -113,23 +107,75 @@ public class Planificador extends Thread {
                             }
                         }
 
-                        // 3era Vuelta: Ya tenemos al ganador definitivo, lo sacamos de la cola
                         for (int i = 0; i < size; i++) {
                             Proceso p = cola.desencolar();
                             if (p != procesoActual) {
-                                cola.encolar(p); // Los demás siguen esperando
+                                cola.encolar(p); 
                             }
                         }
-                        // --- FIN ALGORITMO SCAN ---
+
+                    } else if (politicaActual.equals("C-SCAN")) {
+                        // --- INICIO ALGORITMO C-SCAN (Ascensor Circular) ---
+                        int size = cola.getTamano();
+                        int minDistancia = Integer.MAX_VALUE;
+                        
+                        // 1era Vuelta: Buscar el más cercano siempre hacia la DERECHA (subiendo)
+                        for (int i = 0; i < size; i++) {
+                            Proceso p = cola.desencolar();
+                            int destino = p.getBloqueDestino();
+                            
+                            if (destino >= posicionActual) { // Solo miramos hacia adelante
+                                int distancia = destino - posicionActual;
+                                if (distancia < minDistancia) {
+                                    minDistancia = distancia;
+                                    procesoActual = p;
+                                }
+                            }
+                            cola.encolar(p);
+                        }
+                        
+                        // 2da Vuelta: Si no hay nadie adelante, el ascensor SALTA AL INICIO (0)
+                        // Buscamos el bloque que esté más cerca del 0 (el más bajo de todos)
+                        if (procesoActual == null) {
+                            int bloqueMasBajo = Integer.MAX_VALUE;
+                            
+                            for (int i = 0; i < size; i++) {
+                                Proceso p = cola.desencolar();
+                                int destino = p.getBloqueDestino();
+                                
+                                if (destino < bloqueMasBajo) {
+                                    bloqueMasBajo = destino;
+                                    procesoActual = p;
+                                }
+                                cola.encolar(p);
+                            }
+                        }
+
+                        // 3era Vuelta: Sacar al ganador definitivo de la cola
+                        for (int i = 0; i < size; i++) {
+                            Proceso p = cola.desencolar();
+                            if (p != procesoActual) {
+                                cola.encolar(p);
+                            }
+                        }
+                        // --- FIN ALGORITMO C-SCAN ---
+
                     } else {
-                        // Por si acaso eligen alguna otra (C-SCAN) o hay error, usamos FIFO por defecto
-                        procesoActual = cola.desencolar();
+                        procesoActual = cola.desencolar(); // Por si acaso
                     }
                     // --- FIN DE LA LÓGICA DE POLÍTICAS ---
 
                     procesoActual.setEstado("Ejecutando");
                     int destino = procesoActual.getBloqueDestino();
-                    int movimiento = Math.abs(destino - posicionActual);
+                    
+                    // Calculamos la distancia total. Si es C-SCAN y regresó al inicio, 
+                    // el movimiento real suma el salto.
+                    int movimiento;
+                    if (politicaActual.equals("C-SCAN") && destino < posicionActual) {
+                        movimiento = (99 - posicionActual) + destino; // Salto al final y regreso al inicio
+                    } else {
+                        movimiento = Math.abs(destino - posicionActual);
+                    }
                     
                     gestor.actualizarColaVisual();
                     Thread.sleep(velocidadMs); // El disco viaja...
