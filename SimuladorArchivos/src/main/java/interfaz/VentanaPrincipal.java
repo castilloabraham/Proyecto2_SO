@@ -157,7 +157,7 @@ public class VentanaPrincipal extends JFrame {
         lblVelocidad.setForeground(COLOR_TEXTO);
         
         // 2. Configuramos el slider: Min=100ms, Max=2000ms, Inicio=300ms
-        sliderVelocidad = new JSlider(100, 2000, 300);
+        sliderVelocidad = new JSlider(100, 10000, 5000);
         sliderVelocidad.setOpaque(false);
         sliderVelocidad.setForeground(COLOR_ACCENTO);
         
