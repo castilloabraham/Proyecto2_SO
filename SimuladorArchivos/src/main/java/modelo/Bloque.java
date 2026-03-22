@@ -4,11 +4,13 @@ public class Bloque {
     private int id;
     private boolean libre;
     private String contenido; // Lo que guarda el bloque
+    private String archivoAsignado;
 
     public Bloque(int id) {
         this.id = id;
         this.libre = true; // Todo bloque nace libre
         this.contenido = "";
+        this.archivoAsignado = "Ninguno";
     }
 
     public int getId() { return id; }
@@ -20,4 +22,7 @@ public class Bloque {
     public String getContenido() { return contenido; }
     
     public void setContenido(String contenido) { this.contenido = contenido; }
+    
+    public String getArchivoAsignado() { return archivoAsignado; }
+    public void setArchivoAsignado(String archivoAsignado) { this.archivoAsignado = archivoAsignado; }
 }

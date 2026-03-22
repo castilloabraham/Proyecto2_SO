@@ -122,16 +122,15 @@ public class VentanaPrincipal extends JFrame {
         btnEliminar.addActionListener(e -> accionEliminarArchivo());
         panel.add(btnEliminar);
 
-        // --- BOTONES QUE FALTAN POR PROGRAMAR (Solo visuales por ahora) ---
         // --- 5. BOTÓN ESTADÍSTICAS ---
         JButton btnEstadisticas = new JButton("Estadísticas");
         styleModernButton(btnEstadisticas);
-        btnEstadisticas.addActionListener(e -> accionEstadisticas()); // ¡Conectado!
+        btnEstadisticas.addActionListener(e -> accionEstadisticas()); 
         panel.add(btnEstadisticas);
 
-        // --- EL ÚNICO BOTÓN QUE NOS FALTA AHORA ES LEER ---
         JButton btnLeer = new JButton("Leer");
         styleModernButton(btnLeer);
+        btnLeer.addActionListener(e -> accionLeerArchivo()); 
         panel.add(btnLeer);
         
         return panel;
@@ -368,11 +367,19 @@ public class VentanaPrincipal extends JFrame {
         // --- 1. Refrescar Mapa de Disco ---
         panelDiscoBlocks.removeAll();
         modelo.Bloque[] bloquesReales = gestor.getDisco().getBloques();
+        
         for (int i = 0; i < gestor.getDisco().getCapacidad(); i++) {
             JPanel block = new JPanel();
-            // Pintar de color acento (azul) si está ocupado, gris si está libre
-            block.setBackground(bloquesReales[i].isLibre() ? Color.GRAY : COLOR_ACCENTO); 
             block.setBorder(BorderFactory.createLineBorder(COLOR_FONDO, 1));
+            
+            // LÓGICA DE COLOR Y TOOLTIP (HOVER)
+            if (bloquesReales[i].isLibre()) {
+                block.setBackground(Color.GRAY);
+                block.setToolTipText("Bloque " + i + ": Libre"); // Hover gris
+            } else {
+                block.setBackground(COLOR_ACCENTO);
+                block.setToolTipText("Bloque " + i + ": Ocupado por '" + bloquesReales[i].getArchivoAsignado() + "'"); // Hover azul
+            }
             
             JLabel lblId = new JLabel(String.valueOf(i));
             lblId.setFont(new Font("Arial", Font.PLAIN, 10));
@@ -479,5 +486,22 @@ public class VentanaPrincipal extends JFrame {
         
         // Lo mostramos en una ventana emergente
         JOptionPane.showMessageDialog(this, reporte, "Estadísticas del Sistema", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void accionLeerArchivo() {
+        // 1. Pedimos qué archivo quiere leer
+        String nombre = JOptionPane.showInputDialog(this, "Ingrese el nombre del archivo a leer:");
+        if (nombre == null || nombre.trim().isEmpty()) return;
+
+        // 2. Le pedimos al Gestor que lo lea y calcule el movimiento
+        String resultado = gestor.leerArchivo(nombre);
+
+        // 3. Mostramos los resultados
+        if (resultado != null) {
+            JOptionPane.showMessageDialog(this, resultado, "Lectura de Disco", JOptionPane.INFORMATION_MESSAGE);
+            areaLog.append("Lectura: '" + nombre + "' procesada.\n");
+        } else {
+            JOptionPane.showMessageDialog(this, "No se encontró el archivo '" + nombre + "'.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 }
