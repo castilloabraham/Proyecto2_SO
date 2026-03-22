@@ -4,20 +4,34 @@ import modelo.Archivo;
 import modelo.Bloque;
 import modelo.Directorio;
 import modelo.Disco;
+import estructuras.Cola;
+import modelo.Proceso;
 
 public class GestorArchivos {
     
     private Disco disco;
     private Directorio directorioRaiz;
+    
+    private Cola<Proceso> colaProcesos; 
+    private int contadorProcesos = 1;
 
     public GestorArchivos() {
         this.disco = new Disco(100);
         this.directorioRaiz = new Directorio("raiz");
+        this.colaProcesos = new Cola<>();
     }
-
+    
+    public Cola<Proceso> getColaProcesos() { return colaProcesos; }
     public Disco getDisco() { return disco; }
     public Directorio getDirectorioRaiz() { return directorioRaiz; }
     private int posicionCabeza = 0; // La aguja siempre empieza en el bloque 0
+    
+    public void encolarSolicitudLectura(String nombreArchivo) {
+        // En un proyecto real, buscaríamos el bloqueInicial del archivo primero
+        Proceso p = new Proceso("P" + contadorProcesos++, "LEER", nombreArchivo, 0);
+        p.setEstado("Listo");
+        colaProcesos.encolar(p);
+    }
 
     // Retorna true si se pudo crear, false si no hay espacio
     public boolean crearArchivo(String nombre, int tamaño, String propietario) {
