@@ -88,4 +88,26 @@ public class GestorArchivos {
         directorioRaiz.agregarSubdirectorio(nuevoDir);
         return true;
     }
+    
+    public boolean renombrarItem(String nombreAntiguo, String nombreNuevo) {
+        // 1. Primero buscamos si es un archivo
+        estructuras.ListaEnlazada<modelo.Archivo> archivos = directorioRaiz.getArchivos();
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            if (archivos.obtener(i).getNombre().equals(nombreAntiguo)) {
+                archivos.obtener(i).setNombre(nombreNuevo);
+                return true; // Éxito
+            }
+        }
+        
+        // 2. Si no era un archivo, buscamos si es una carpeta (directorio)
+        estructuras.ListaEnlazada<modelo.Directorio> subdirs = directorioRaiz.getSubdirectorios();
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            if (subdirs.obtener(i).getNombre().equals(nombreAntiguo)) {
+                subdirs.obtener(i).setNombre(nombreNuevo);
+                return true; // Éxito
+            }
+        }
+        
+        return false; // No se encontró ni archivo ni carpeta con ese nombre
+    }
 }

@@ -98,30 +98,38 @@ public class VentanaPrincipal extends JFrame {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         panel.setOpaque(false);
         
-        // Botón Crear Archivo (Ya lo teníamos)
+        // --- 1. BOTÓN CREAR ARCHIVO ---
         JButton btnCrearArchivo = new JButton("Crear Archivo");
         styleModernButton(btnCrearArchivo);
         btnCrearArchivo.addActionListener(e -> accionCrearArchivo());
         panel.add(btnCrearArchivo);
 
-        JButton btnEliminar = new JButton("Eliminar");
-        styleModernButton(btnEliminar);
-        btnEliminar.addActionListener(e -> accionEliminarArchivo()); // Conectamos la acción
-        panel.add(btnEliminar);
-
-        // Los demás botones visuales
+        // --- 2. BOTÓN CREAR DIRECTORIO ---
         JButton btnCrearDirectorio = new JButton("Crear Directorio");
         styleModernButton(btnCrearDirectorio);
-        btnCrearDirectorio.addActionListener(e -> accionCrearDirectorio()); // ¡Conectado!
+        btnCrearDirectorio.addActionListener(e -> accionCrearDirectorio());
         panel.add(btnCrearDirectorio);
 
-        // Los demás botones visuales que nos faltan
-        String[] otrosBotones = {"Leer", "Renombrar", "Estadísticas"};
+        // --- 3. BOTÓN RENOMBRAR ---
+        JButton btnRenombrar = new JButton("Renombrar");
+        styleModernButton(btnRenombrar);
+        btnRenombrar.addActionListener(e -> accionRenombrar());
+        panel.add(btnRenombrar);
+
+        // --- 4. BOTÓN ELIMINAR ---
+        JButton btnEliminar = new JButton("Eliminar");
+        styleModernButton(btnEliminar);
+        btnEliminar.addActionListener(e -> accionEliminarArchivo());
+        panel.add(btnEliminar);
+
+        // --- BOTONES QUE FALTAN POR PROGRAMAR (Solo visuales por ahora) ---
+        String[] otrosBotones = {"Leer", "Estadísticas"};
         for (String nombre : otrosBotones) {
             JButton btn = new JButton(nombre);
             styleModernButton(btn);
             panel.add(btn);
         }
+        
         return panel;
     }
 
@@ -439,5 +447,25 @@ public class VentanaPrincipal extends JFrame {
         gestor.crearDirectorio(nombre);
         areaLog.append("Directorio creado: " + nombre + "\n");
         actualizarPantallaCompleta();
+    }
+    private void accionRenombrar() {
+        // Pedimos el nombre actual
+        String nombreAntiguo = JOptionPane.showInputDialog(this, "Ingrese el nombre ACTUAL del archivo o carpeta:");
+        if (nombreAntiguo == null || nombreAntiguo.trim().isEmpty()) return;
+
+        // Pedimos el nombre nuevo
+        String nombreNuevo = JOptionPane.showInputDialog(this, "Ingrese el NUEVO nombre:");
+        if (nombreNuevo == null || nombreNuevo.trim().isEmpty()) return;
+
+        // Le decimos al Gestor que haga el trabajo
+        boolean exito = gestor.renombrarItem(nombreAntiguo, nombreNuevo);
+
+        if (exito) {
+            JOptionPane.showMessageDialog(this, "Renombrado con éxito a: " + nombreNuevo, "Éxito", JOptionPane.INFORMATION_MESSAGE);
+            areaLog.append("Renombrado: '" + nombreAntiguo + "' -> '" + nombreNuevo + "'\n");
+            actualizarPantallaCompleta(); // Refrescamos el árbol y la tabla
+        } else {
+            JOptionPane.showMessageDialog(this, "No se encontró nada con el nombre '" + nombreAntiguo + "'.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 }
