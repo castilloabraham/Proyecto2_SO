@@ -9,6 +9,7 @@ public class Planificador extends Thread {
     private boolean ejecutando = true;
     private int velocidadMs = 500; // Tiempo que tarda en moverse (Luego lo conectaremos a tu Slider)
     private String politicaActual = "FIFO"; // Por defecto iniciamos en FIFO
+    private boolean moviendoDerecha = true; // true = hacia el 99, false = hacia el 0
 
     public Planificador(GestorArchivos gestor) {
         this.gestor = gestor;
@@ -63,8 +64,65 @@ public class Planificador extends Thread {
                                 cola.encolar(p); // Si no es el ganador, sigue haciendo fila
                             }
                         }
+                        
+                    } else if (politicaActual.equals("SCAN")) {
+                        // --- INICIO ALGORITMO SCAN (Ascensor) ---
+                        int size = cola.getTamano();
+                        int minDistancia = Integer.MAX_VALUE;
+                        
+                        // 1era Vuelta: Buscar el más cercano EN LA DIRECCIÓN ACTUAL
+                        for (int i = 0; i < size; i++) {
+                            Proceso p = cola.desencolar();
+                            int destino = p.getBloqueDestino();
+                            
+                            // ¿Está en nuestro camino?
+                            boolean enCamino = (moviendoDerecha && destino >= posicionActual) || 
+                                               (!moviendoDerecha && destino <= posicionActual);
+                            
+                            if (enCamino) {
+                                int distancia = Math.abs(destino - posicionActual);
+                                if (distancia < minDistancia) {
+                                    minDistancia = distancia;
+                                    procesoActual = p; // Tenemos un candidato en nuestra dirección
+                                }
+                            }
+                            cola.encolar(p); // Regresa a la fila temporalmente
+                        }
+                        
+                        // 2da Vuelta (Solo si es necesario): Si no encontramos a nadie en nuestro camino, 
+                        // el ascensor CAMBIA DE DIRECCIÓN y busca de nuevo.
+                        if (procesoActual == null) {
+                            moviendoDerecha = !moviendoDerecha; // ¡Metemos reversa!
+                            minDistancia = Integer.MAX_VALUE;
+                            
+                            for (int i = 0; i < size; i++) {
+                                Proceso p = cola.desencolar();
+                                int destino = p.getBloqueDestino();
+                                
+                                boolean enCamino = (moviendoDerecha && destino >= posicionActual) || 
+                                                   (!moviendoDerecha && destino <= posicionActual);
+                                
+                                if (enCamino) {
+                                    int distancia = Math.abs(destino - posicionActual);
+                                    if (distancia < minDistancia) {
+                                        minDistancia = distancia;
+                                        procesoActual = p;
+                                    }
+                                }
+                                cola.encolar(p);
+                            }
+                        }
+
+                        // 3era Vuelta: Ya tenemos al ganador definitivo, lo sacamos de la cola
+                        for (int i = 0; i < size; i++) {
+                            Proceso p = cola.desencolar();
+                            if (p != procesoActual) {
+                                cola.encolar(p); // Los demás siguen esperando
+                            }
+                        }
+                        // --- FIN ALGORITMO SCAN ---
                     } else {
-                        // Si eligen SCAN o C-SCAN (que aún no programamos), usamos FIFO por defecto
+                        // Por si acaso eligen alguna otra (C-SCAN) o hay error, usamos FIFO por defecto
                         procesoActual = cola.desencolar();
                     }
                     // --- FIN DE LA LÓGICA DE POLÍTICAS ---
