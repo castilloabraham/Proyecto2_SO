@@ -19,54 +19,52 @@ public class Planificador extends Thread {
     }
     
     public void setVelocidad(int velocidad) {
-        // Mapeamos el valor del slider (0-100) a milisegundos reales (ej. 1000ms a 50ms)
-        this.velocidadMs = 1000 - (velocidad * 9); 
+        // Ahora el slider nos manda los milisegundos directos (100 a 2000)
+        this.velocidadMs = velocidad; 
     }
 
     @Override
     public void run() {
         while (ejecutando) {
-            Cola<Proceso> cola = gestor.getColaProcesos();
-            
-            if (!cola.estaVacia()) {
-                // 1. Elegimos el proceso (Por ahora programaremos FIFO, el más fácil)
-                Proceso procesoActual = cola.desencolar(); 
-                procesoActual.setEstado("Ejecutando");
+            try {
+                Cola<Proceso> cola = gestor.getColaProcesos();
                 
-                int destino = procesoActual.getBloqueDestino();
-                int posicionActual = gestor.getPosicionCabeza();
-                
-                // Calculamos cuánto viaja la cabeza
-                int movimiento = Math.abs(destino - posicionActual);
-                
-                try {
-                    // Actualizamos la pantalla para mostrar que hay un proceso en ejecución
+                if (!cola.estaVacia()) {
+                    Proceso procesoActual = cola.desencolar(); 
+                    procesoActual.setEstado("Ejecutando");
+                    
+                    int destino = procesoActual.getBloqueDestino();
+                    int posicionActual = gestor.getPosicionCabeza();
+                    int movimiento = Math.abs(destino - posicionActual);
+                    
+                    // Aviso en consola para saber que el hilo sigue vivo
+                    System.out.println("-> [Debug] Intentando atender proceso: " + procesoActual.getIdProceso());
+                    
                     gestor.actualizarColaVisual();
-
-                    // 2. Simulamos el viaje del disco
                     Thread.sleep(velocidadMs); 
                     
-                    // 3. ¡Llegó al bloque! Actualizamos el sistema
                     gestor.setPosicionCabeza(destino);
                     procesoActual.setEstado("Terminado");
                     
-                    // 4. IMPRIMIMOS EN LA PANTALLA DE TU INTERFAZ (Reemplaza el System.out.println)
-                    gestor.imprimirEnLogVisual("✅ [Scheduler] Atendió: " + procesoActual.getIdProceso() + 
-                                               " | Viajó " + movimiento + " bloques hasta el bloque " + destino);
+                    String mensaje = "✅ [Scheduler] Atendió: " + procesoActual.getIdProceso() + 
+                                     " | Viajó " + movimiento + " bloques hasta el bloque " + destino;
                     
-                    // 5. Refrescamos la cola visual para mostrar los cambios
+                    // Imprimimos en ambas partes por si la interfaz falla
+                    System.out.println(mensaje); 
+                    gestor.imprimirEnLogVisual(mensaje); 
+                    
                     gestor.actualizarColaVisual();
                     
-                } catch (InterruptedException e) {
-                    procesoActual.setEstado("Bloqueado");
-                }
-            } else {
-                // Si la cola está vacía, el planificador descansa un poco para no saturar la PC
-                try {
+                } else {
+                    // Descanso cuando está vacía
                     Thread.sleep(200);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
                 }
+            } catch (InterruptedException e) {
+                System.out.println("⚠️ Hilo interrumpido.");
+            } catch (Exception e) {
+                // ¡AQUÍ ESTÁ LA MAGIA! Si la interfaz lo rompe, lo veremos aquí.
+                System.out.println("❌ ERROR FATAL EN EL PLANIFICADOR:");
+                e.printStackTrace();
             }
         }
     }

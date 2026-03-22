@@ -89,7 +89,16 @@ public class VentanaPrincipal extends JFrame {
 
         panel.add(new JLabel("Planificador:", JLabel.LEFT) {{ setForeground(COLOR_TEXTO); }});
         String[] algos = {"FIFO", "SSTF", "SCAN", "C-SCAN"};
+        
+        // --- MODIFICACIÓN AQUÍ ---
         JComboBox<String> comboAlgo = new JComboBox<>(algos);
+        comboAlgo.addActionListener(e -> {
+            String seleccion = (String) comboAlgo.getSelectedItem();
+            gestor.cambiarPoliticaPlanificador(seleccion); // Le avisamos al cerebro
+            areaLog.append("⚙️ Política cambiada a: " + seleccion + "\n");
+        });
+        // -------------------------
+        
         panel.add(comboAlgo);
         
         return panel;
@@ -142,11 +151,25 @@ public class VentanaPrincipal extends JFrame {
         panel.setOpaque(false);
         
         panel.add(new JLabel("Velocidad:", JLabel.LEFT) {{ setForeground(COLOR_TEXTO); }});
-        sliderVelocidad = new JSlider(0, 100, 50);
+        
+        // 1. Creamos la etiqueta ANTES del slider para poder modificarla
+        JLabel lblVelocidad = new JLabel("300 ms");
+        lblVelocidad.setForeground(COLOR_TEXTO);
+        
+        // 2. Configuramos el slider: Min=100ms, Max=2000ms, Inicio=300ms
+        sliderVelocidad = new JSlider(100, 2000, 300);
         sliderVelocidad.setOpaque(false);
         sliderVelocidad.setForeground(COLOR_ACCENTO);
+        
+        // 3. Le agregamos el "escuchador" al slider
+        sliderVelocidad.addChangeListener(e -> {
+            int valorMs = sliderVelocidad.getValue();
+            lblVelocidad.setText(valorMs + " ms"); // ¡Esto actualiza el texto en la pantalla!
+            gestor.cambiarVelocidadDisco(valorMs); // Le avisamos al cerebro
+        });
+
         panel.add(sliderVelocidad);
-        panel.add(new JLabel("300 ms (Normal)") {{ setForeground(COLOR_TEXTO); }});
+        panel.add(lblVelocidad);
 
         panel.add(new JLabel("   Ciclo: 0") {{ setForeground(COLOR_TEXTO); }});
         panel.add(new JLabel("   Cabeza: 0") {{ setForeground(COLOR_TEXTO); }});
