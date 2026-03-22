@@ -18,4 +18,6 @@ public class Archivo {
     public int getTamañoEnBloques() { return tamañoEnBloques; }
     public int getBloqueInicial() { return bloqueInicial; }
     public String getPropietario() { return propietario; }
+    
+    public void setNombre(String nombre) { this.nombre = nombre; }
 }
