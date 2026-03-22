@@ -204,4 +204,15 @@ public class GestorArchivos {
         }
         return null; // Retorna null si no encontró el archivo
     }
+    public void cambiarVelocidadDisco(int nuevaVelocidad) {
+        if (this.planificador != null) {
+            this.planificador.setVelocidad(nuevaVelocidad);
+        }
+    }
+
+    public void cambiarPoliticaPlanificador(String nuevaPolitica) {
+        if (this.planificador != null) {
+            this.planificador.setPolitica(nuevaPolitica);
+        }
+    }
 }
