@@ -38,6 +38,7 @@ public class VentanaPrincipal extends JFrame {
         
         // 1. INICIALIZAMOS EL CONTROLADOR (El cerebro)
         this.gestor = new GestorArchivos();
+        this.gestor.setVentana(this);
 
         setSize(1300, 900);
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -328,6 +329,19 @@ public class VentanaPrincipal extends JFrame {
         table.getTableHeader().setForeground(COLOR_TEXTO);
         table.getTableHeader().setFont(FUENTE_TITULO);
     }
+    
+    public void agregarMensajeLog(String mensaje) {
+        SwingUtilities.invokeLater(() -> {
+            areaLog.append(mensaje + "\n");
+            areaLog.setCaretPosition(areaLog.getDocument().getLength()); // Auto-scroll
+        });
+    }
+
+    public void actualizarPantallaProcesos(String texto) {
+        SwingUtilities.invokeLater(() -> {
+            areaProcesos.setText(texto);
+        });
+    }
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
@@ -499,7 +513,6 @@ public class VentanaPrincipal extends JFrame {
         // 3. Mostramos los resultados
         if (resultado != null) {
             JOptionPane.showMessageDialog(this, resultado, "Lectura de Disco", JOptionPane.INFORMATION_MESSAGE);
-            areaLog.append("Lectura: '" + nombre + "' procesada.\n");
         } else {
             JOptionPane.showMessageDialog(this, "No se encontró el archivo '" + nombre + "'.", "Error", JOptionPane.ERROR_MESSAGE);
         }

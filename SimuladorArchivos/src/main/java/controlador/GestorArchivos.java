@@ -14,17 +14,45 @@ public class GestorArchivos {
     
     private Cola<Proceso> colaProcesos; 
     private int contadorProcesos = 1;
+    private Planificador planificador;
+    
+    private interfaz.VentanaPrincipal ventana;
 
     public GestorArchivos() {
         this.disco = new Disco(100);
         this.directorioRaiz = new Directorio("raiz");
         this.colaProcesos = new Cola<>();
+        this.planificador = new Planificador(this);
+        this.planificador.start(); // ¡Esto enciende el motor en segundo plano!
+    }
+    
+    public void setVentana(interfaz.VentanaPrincipal ventana) {
+        this.ventana = ventana;
+    }
+
+    public void imprimirEnLogVisual(String mensaje) {
+        if (this.ventana != null) {
+            this.ventana.agregarMensajeLog(mensaje);
+        }
+    }
+
+    public void actualizarColaVisual() {
+        if (this.ventana != null) {
+            StringBuilder sb = new StringBuilder();
+            sb.append("=== COLA DE PROCESOS (I/O) ===\n");
+            sb.append("Esperando para usar el disco: ").append(colaProcesos.getTamano()).append(" procesos.\n");
+            this.ventana.actualizarPantallaProcesos(sb.toString());
+        }
     }
     
     public Cola<Proceso> getColaProcesos() { return colaProcesos; }
     public Disco getDisco() { return disco; }
     public Directorio getDirectorioRaiz() { return directorioRaiz; }
     private int posicionCabeza = 0; // La aguja siempre empieza en el bloque 0
+
+    // 3. Asegúrate de tener el getter y setter para la aguja del disco:
+    public int getPosicionCabeza() { return posicionCabeza; }
+    public void setPosicionCabeza(int posicion) { this.posicionCabeza = posicion; }
     
     public void encolarSolicitudLectura(String nombreArchivo) {
         // En un proyecto real, buscaríamos el bloqueInicial del archivo primero
@@ -160,15 +188,18 @@ public class GestorArchivos {
             if (arch.getNombre().equals(nombre)) {
                 int bloqueDestino = arch.getBloqueInicial();
                 
-                // Calculamos cuánto tuvo que viajar la cabeza del disco (matemática de valor absoluto)
-                int movimiento = Math.abs(bloqueDestino - posicionCabeza);
+                // 1. Creamos un proceso simulando la solicitud de I/O
+                modelo.Proceso p = new modelo.Proceso("P" + contadorProcesos++, "LEER", nombre, bloqueDestino);
+                p.setEstado("Listo"); // Estado inicial antes de entrar al disco
                 
-                // Movemos la cabeza hasta el final del archivo que acabamos de leer
-                posicionCabeza = bloqueDestino + arch.getTamañoEnBloques() - 1; 
+                // 2. Lo metemos en la cola de procesos para que el Planificador lo atienda
+                colaProcesos.encolar(p);
+                actualizarColaVisual();
                 
-                return "✅ Archivo '" + nombre + "' leído exitosamente.\n\n" +
-                       "📍 La cabeza viajó " + movimiento + " bloques para encontrarlo.\n" +
-                       "🎯 Posición actual de la cabeza: Bloque " + posicionCabeza;
+                // 3. Devolvemos un mensaje indicando que la solicitud está en espera
+                return "⏳ Solicitud enviada a la cola de I/O.\n" +
+                       "El disco se moverá pronto hacia el bloque " + bloqueDestino + ".\n" +
+                       "Revisa el Log de Procesos.";
             }
         }
         return null; // Retorna null si no encontró el archivo
