@@ -68,25 +68,34 @@ public class GestorArchivos {
             return false; 
         }
 
-        // 2. Buscar bloques libres y ocuparlos
+        // 2. Buscar bloques libres y ocuparlos (CON ASIGNACIÓN ENCADENADA)
         int bloquesAsignados = 0;
         int primerBloque = -1;
+        int bloqueAnterior = -1; // <-- NUEVO: Para llevar el rastro y enlazar
         Bloque[] bloquesReales = disco.getBloques();
 
         for (int i = 0; i < disco.getCapacidad(); i++) {
             if (bloquesReales[i].isLibre()) {
+                
                 if (bloquesAsignados == 0) {
                     primerBloque = i; // Guardamos dónde empieza el archivo
+                } else {
+                    // NUEVO: Le decimos al bloque anterior que apunte a este nuevo bloque
+                    bloquesReales[bloqueAnterior].setSiguienteBloque(i);
                 }
                 
                 bloquesReales[i].setLibre(false); // Lo marcamos como ocupado
                 bloquesReales[i].setArchivoAsignado(nombre); // Le damos el nombre para el tooltip
                 bloquesReales[i].setContenido("Datos de: " + nombre); 
+                bloquesReales[i].setSiguienteBloque(-1); // <-- NUEVO: Por defecto apunta a -1 (Fin de archivo)
                 
+                bloqueAnterior = i; // Actualizamos el bloque anterior para la próxima iteración
                 bloquesAsignados++;
             }
+            
+            // Si ya encontramos todo el espacio necesario, nos salimos del ciclo
             if (bloquesAsignados == tamaño) {
-                break; // Ya encontramos todo el espacio necesario
+                break; 
             }
         }
 

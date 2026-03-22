@@ -5,6 +5,8 @@ public class Archivo {
     private int tamañoEnBloques;
     private int bloqueInicial;
     private String propietario; // Para la tabla
+    private boolean siendoLeido = false;
+    private boolean siendoEscrito = false;
 
     public Archivo(String nombre, int tamañoEnBloques, int bloqueInicial, String propietario) {
         this.nombre = nombre;
