@@ -18,6 +18,7 @@ public class GestorArchivos {
     // MÉTODOS EXISTENTES
     public Disco getDisco() { return disco; }
     public Directorio getDirectorioRaiz() { return directorioRaiz; }
+    private int posicionCabeza = 0; // La aguja siempre empieza en el bloque 0
 
     // --- NUEVO: LÓGICA PARA CREAR ARCHIVO ---
     // Retorna true si se pudo crear, false si no hay espacio
@@ -130,5 +131,28 @@ public class GestorArchivos {
                "🟢 Espacio Libre: " + libre + " bloques\n" +
                "📄 Total de Archivos: " + numArchivos + "\n" +
                "📁 Total de Carpetas: " + numCarpetas;
+    }
+    
+    public String leerArchivo(String nombre) {
+        estructuras.ListaEnlazada<modelo.Archivo> archivos = directorioRaiz.getArchivos();
+        
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            modelo.Archivo arch = archivos.obtener(i);
+            
+            if (arch.getNombre().equals(nombre)) {
+                int bloqueDestino = arch.getBloqueInicial();
+                
+                // Calculamos cuánto tuvo que viajar la cabeza del disco (matemática de valor absoluto)
+                int movimiento = Math.abs(bloqueDestino - posicionCabeza);
+                
+                // Movemos la cabeza hasta el final del archivo que acabamos de leer
+                posicionCabeza = bloqueDestino + arch.getTamañoEnBloques() - 1; 
+                
+                return "✅ Archivo '" + nombre + "' leído exitosamente.\n\n" +
+                       "📍 La cabeza viajó " + movimiento + " bloques para encontrarlo.\n" +
+                       "🎯 Posición actual de la cabeza: Bloque " + posicionCabeza;
+            }
+        }
+        return null; // Retorna null si no encontró el archivo
     }
 }

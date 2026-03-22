@@ -129,9 +129,9 @@ public class VentanaPrincipal extends JFrame {
         btnEstadisticas.addActionListener(e -> accionEstadisticas()); // ¡Conectado!
         panel.add(btnEstadisticas);
 
-        // --- EL ÚNICO BOTÓN QUE NOS FALTA AHORA ES LEER ---
         JButton btnLeer = new JButton("Leer");
         styleModernButton(btnLeer);
+        btnLeer.addActionListener(e -> accionLeerArchivo()); // ¡Conectado!
         panel.add(btnLeer);
         
         return panel;
@@ -479,5 +479,22 @@ public class VentanaPrincipal extends JFrame {
         
         // Lo mostramos en una ventana emergente
         JOptionPane.showMessageDialog(this, reporte, "Estadísticas del Sistema", JOptionPane.INFORMATION_MESSAGE);
+    }
+    
+    private void accionLeerArchivo() {
+        // 1. Pedimos qué archivo quiere leer
+        String nombre = JOptionPane.showInputDialog(this, "Ingrese el nombre del archivo a leer:");
+        if (nombre == null || nombre.trim().isEmpty()) return;
+
+        // 2. Le pedimos al Gestor que lo lea y calcule el movimiento
+        String resultado = gestor.leerArchivo(nombre);
+
+        // 3. Mostramos los resultados
+        if (resultado != null) {
+            JOptionPane.showMessageDialog(this, resultado, "Lectura de Disco", JOptionPane.INFORMATION_MESSAGE);
+            areaLog.append("Lectura: '" + nombre + "' procesada.\n");
+        } else {
+            JOptionPane.showMessageDialog(this, "No se encontró el archivo '" + nombre + "'.", "Error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 }
