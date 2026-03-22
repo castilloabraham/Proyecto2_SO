@@ -110,4 +110,25 @@ public class GestorArchivos {
         
         return false; // No se encontró ni archivo ni carpeta con ese nombre
     }
+    
+    public String obtenerEstadisticas() {
+        int total = disco.getCapacidad();
+        int libre = disco.obtenerEspacioLibre();
+        int ocupado = total - libre;
+        
+        // Contamos lo que hay en la raíz
+        int numArchivos = directorioRaiz.getArchivos().getTamano();
+        int numCarpetas = directorioRaiz.getSubdirectorios().getTamano();
+
+        // Calculamos el porcentaje de uso
+        double porcentajeUso = ((double) ocupado / total) * 100;
+
+        // Armamos un texto bonito para mostrar
+        return "📊 ESTADÍSTICAS DEL DISCO 📊\n\n" +
+               "🔹 Capacidad Total: " + total + " bloques\n" +
+               "🔴 Espacio Ocupado: " + ocupado + " bloques (" + String.format("%.1f", porcentajeUso) + "%)\n" +
+               "🟢 Espacio Libre: " + libre + " bloques\n" +
+               "📄 Total de Archivos: " + numArchivos + "\n" +
+               "📁 Total de Carpetas: " + numCarpetas;
+    }
 }
