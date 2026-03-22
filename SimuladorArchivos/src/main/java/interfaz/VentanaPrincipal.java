@@ -123,12 +123,16 @@ public class VentanaPrincipal extends JFrame {
         panel.add(btnEliminar);
 
         // --- BOTONES QUE FALTAN POR PROGRAMAR (Solo visuales por ahora) ---
-        String[] otrosBotones = {"Leer", "Estadísticas"};
-        for (String nombre : otrosBotones) {
-            JButton btn = new JButton(nombre);
-            styleModernButton(btn);
-            panel.add(btn);
-        }
+        // --- 5. BOTÓN ESTADÍSTICAS ---
+        JButton btnEstadisticas = new JButton("Estadísticas");
+        styleModernButton(btnEstadisticas);
+        btnEstadisticas.addActionListener(e -> accionEstadisticas()); // ¡Conectado!
+        panel.add(btnEstadisticas);
+
+        // --- EL ÚNICO BOTÓN QUE NOS FALTA AHORA ES LEER ---
+        JButton btnLeer = new JButton("Leer");
+        styleModernButton(btnLeer);
+        panel.add(btnLeer);
         
         return panel;
     }
@@ -467,5 +471,13 @@ public class VentanaPrincipal extends JFrame {
         } else {
             JOptionPane.showMessageDialog(this, "No se encontró nada con el nombre '" + nombreAntiguo + "'.", "Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+    
+    private void accionEstadisticas() {
+        // Pedimos los datos calculados al Gestor
+        String reporte = gestor.obtenerEstadisticas();
+        
+        // Lo mostramos en una ventana emergente
+        JOptionPane.showMessageDialog(this, reporte, "Estadísticas del Sistema", JOptionPane.INFORMATION_MESSAGE);
     }
 }
