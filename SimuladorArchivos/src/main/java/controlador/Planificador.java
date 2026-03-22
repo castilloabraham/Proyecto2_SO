@@ -30,39 +30,67 @@ public class Planificador extends Thread {
                 Cola<Proceso> cola = gestor.getColaProcesos();
                 
                 if (!cola.estaVacia()) {
-                    Proceso procesoActual = cola.desencolar(); 
-                    procesoActual.setEstado("Ejecutando");
                     
-                    int destino = procesoActual.getBloqueDestino();
+                    Proceso procesoActual = null;
                     int posicionActual = gestor.getPosicionCabeza();
+
+                    // --- INICIO DE LA LÓGICA DE POLÍTICAS ---
+                    if (politicaActual.equals("FIFO")) {
+                        // FIFO: Saca el primero de la fila (El clásico)
+                        procesoActual = cola.desencolar(); 
+                        
+                    } else if (politicaActual.equals("SSTF")) {
+                        // SSTF: Busca el más cercano
+                        int size = cola.getTamano();
+                        int minDistancia = Integer.MAX_VALUE;
+
+                        // 1era Vuelta: Revisamos todos para ver cuál es el más cercano
+                        for (int i = 0; i < size; i++) {
+                            Proceso p = cola.desencolar();
+                            int distancia = Math.abs(p.getBloqueDestino() - posicionActual);
+                            
+                            if (distancia < minDistancia) {
+                                minDistancia = distancia;
+                                procesoActual = p; // Guardamos al ganador
+                            }
+                            cola.encolar(p); // Lo regresamos a la cola temporalmente
+                        }
+
+                        // 2da Vuelta: Sacamos al ganador definitivo de la cola
+                        for (int i = 0; i < size; i++) {
+                            Proceso p = cola.desencolar();
+                            if (p != procesoActual) {
+                                cola.encolar(p); // Si no es el ganador, sigue haciendo fila
+                            }
+                        }
+                    } else {
+                        // Si eligen SCAN o C-SCAN (que aún no programamos), usamos FIFO por defecto
+                        procesoActual = cola.desencolar();
+                    }
+                    // --- FIN DE LA LÓGICA DE POLÍTICAS ---
+
+                    procesoActual.setEstado("Ejecutando");
+                    int destino = procesoActual.getBloqueDestino();
                     int movimiento = Math.abs(destino - posicionActual);
                     
-                    // Aviso en consola para saber que el hilo sigue vivo
-                    System.out.println("-> [Debug] Intentando atender proceso: " + procesoActual.getIdProceso());
-                    
                     gestor.actualizarColaVisual();
-                    Thread.sleep(velocidadMs); 
+                    Thread.sleep(velocidadMs); // El disco viaja...
                     
                     gestor.setPosicionCabeza(destino);
                     procesoActual.setEstado("Terminado");
                     
-                    String mensaje = "✅ [Scheduler] Atendió: " + procesoActual.getIdProceso() + 
+                    String mensaje = "✅ [" + politicaActual + "] Atendió: " + procesoActual.getIdProceso() + 
                                      " | Viajó " + movimiento + " bloques hasta el bloque " + destino;
                     
-                    // Imprimimos en ambas partes por si la interfaz falla
-                    System.out.println(mensaje); 
                     gestor.imprimirEnLogVisual(mensaje); 
-                    
                     gestor.actualizarColaVisual();
                     
                 } else {
-                    // Descanso cuando está vacía
-                    Thread.sleep(200);
+                    Thread.sleep(200); // Descansa si no hay trabajo
                 }
             } catch (InterruptedException e) {
                 System.out.println("⚠️ Hilo interrumpido.");
             } catch (Exception e) {
-                // ¡AQUÍ ESTÁ LA MAGIA! Si la interfaz lo rompe, lo veremos aquí.
                 System.out.println("❌ ERROR FATAL EN EL PLANIFICADOR:");
                 e.printStackTrace();
             }
