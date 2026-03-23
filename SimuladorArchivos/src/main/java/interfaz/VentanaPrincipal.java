@@ -32,6 +32,11 @@ public class VentanaPrincipal extends JFrame {
     private JTextArea areaProcesos;
     private JPanel panelDiscoBlocks;
     private JSlider sliderVelocidad;
+    private JButton btnCrearArchivo;
+    private JButton btnCrearDirectorio;
+    private JButton btnEliminar;
+    private JButton btnRenombrar;
+    private JButton btnLeer;
 
     public VentanaPrincipal() {
         super("Simulador de Sistema de Archivos OS - [MODERNO]");
@@ -86,6 +91,8 @@ public class VentanaPrincipal extends JFrame {
         JRadioButton rbUsuario = new JRadioButton("Usuario") {{ setForeground(COLOR_TEXTO); setOpaque(false); }};
         ButtonGroup bgModo = new ButtonGroup(); bgModo.add(rbAdmin); bgModo.add(rbUsuario);
         panel.add(rbAdmin); panel.add(rbUsuario);
+        rbAdmin.addActionListener(e -> actualizarPermisos(true));
+        rbUsuario.addActionListener(e -> actualizarPermisos(false));
 
         panel.add(new JLabel("Planificador:", JLabel.LEFT) {{ setForeground(COLOR_TEXTO); }});
         String[] algos = {"FIFO", "SSTF", "SCAN", "C-SCAN"};
@@ -108,37 +115,34 @@ public class VentanaPrincipal extends JFrame {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 0));
         panel.setOpaque(false);
         
-        // --- 1. BOTÓN CREAR ARCHIVO ---
-        JButton btnCrearArchivo = new JButton("Crear Archivo");
+        // Inicializamos los atributos de clase (sin poner "JButton" adelante)
+        btnCrearArchivo = new JButton("Crear Archivo");
         styleModernButton(btnCrearArchivo);
         btnCrearArchivo.addActionListener(e -> accionCrearArchivo());
         panel.add(btnCrearArchivo);
 
-        // --- 2. BOTÓN CREAR DIRECTORIO ---
-        JButton btnCrearDirectorio = new JButton("Crear Directorio");
+        btnCrearDirectorio = new JButton("Crear Directorio");
         styleModernButton(btnCrearDirectorio);
         btnCrearDirectorio.addActionListener(e -> accionCrearDirectorio());
         panel.add(btnCrearDirectorio);
 
-        // --- 3. BOTÓN RENOMBRAR ---
-        JButton btnRenombrar = new JButton("Renombrar");
+        btnRenombrar = new JButton("Renombrar");
         styleModernButton(btnRenombrar);
         btnRenombrar.addActionListener(e -> accionRenombrar());
         panel.add(btnRenombrar);
 
-        // --- 4. BOTÓN ELIMINAR ---
-        JButton btnEliminar = new JButton("Eliminar");
+        btnEliminar = new JButton("Eliminar");
         styleModernButton(btnEliminar);
         btnEliminar.addActionListener(e -> accionEliminarArchivo());
         panel.add(btnEliminar);
 
-        // --- 5. BOTÓN ESTADÍSTICAS ---
+        // El de estadísticas y leer no suelen bloquearse, pero los dejamos igual
         JButton btnEstadisticas = new JButton("Estadísticas");
         styleModernButton(btnEstadisticas);
         btnEstadisticas.addActionListener(e -> accionEstadisticas()); 
         panel.add(btnEstadisticas);
 
-        JButton btnLeer = new JButton("Leer");
+        btnLeer = new JButton("Leer");
         styleModernButton(btnLeer);
         btnLeer.addActionListener(e -> accionLeerArchivo()); 
         panel.add(btnLeer);
@@ -540,4 +544,16 @@ public class VentanaPrincipal extends JFrame {
             JOptionPane.showMessageDialog(this, "No se encontró el archivo '" + nombre + "'.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
+    private void actualizarPermisos(boolean esAdmin) {
+    btnCrearArchivo.setEnabled(esAdmin);
+    btnCrearDirectorio.setEnabled(esAdmin);
+    btnEliminar.setEnabled(esAdmin);
+    btnRenombrar.setEnabled(esAdmin);
+    
+    if(!esAdmin) {
+        areaLog.append("⚠️ Modo Usuario: Acceso restringido a solo lectura.\n");
+    } else {
+        areaLog.append("🔓 Modo Administrador: Acceso total habilitado.\n");
+    }
+}
 }
