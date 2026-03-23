@@ -165,9 +165,6 @@ public class Planificador extends Thread {
                     // --- FIN DE LA LÓGICA DE POLÍTICAS ---
 
 
-                    // =========================================================
-                    // --- NUEVO: CONTROL DE CONCURRENCIA (LOCKS) ---
-                    // =========================================================
                     modelo.Archivo archivoObjetivo = gestor.buscarArchivoObj(procesoActual.getNombreArchivo());
                     boolean puedeEjecutar = true;
 
@@ -211,9 +208,6 @@ public class Planificador extends Thread {
                     procesoActual.setEstado("Terminado");
                     
 
-                    // =========================================================
-                    // --- NUEVO: LIBERAR LOS LOCKS AL TERMINAR ---
-                    // =========================================================
                     if (archivoObjetivo != null) {
                         if (procesoActual.getTipoOperacion().equals("LEER")) {
                             archivoObjetivo.terminarLeer();
