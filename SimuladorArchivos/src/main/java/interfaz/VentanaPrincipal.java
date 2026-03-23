@@ -475,20 +475,25 @@ public class VentanaPrincipal extends JFrame {
     }
     
     private void accionEliminarArchivo() {
-        // 1. Preguntarle al usuario qué archivo quiere borrar
-        String nombre = JOptionPane.showInputDialog(this, "Ingrese el nombre del archivo a eliminar:");
+        // 1. Preguntarle al usuario qué quiere borrar
+        String nombre = JOptionPane.showInputDialog(this, "Ingrese el nombre del archivo o carpeta a eliminar:");
         if (nombre == null || nombre.trim().isEmpty()) return;
 
-        // 2. Llamar al Gestor para que lo elimine
+        // 2. Intentar borrar como archivo primero
         boolean exito = gestor.eliminarArchivo(nombre);
+        
+        // 3. Si no era un archivo, intentar borrar como directorio
+        if (!exito) {
+            exito = gestor.eliminarDirectorio(nombre);
+        }
 
-        // 3. Mostrar resultado y refrescar
+        // 4. Mostrar resultado y refrescar
         if (exito) {
-            JOptionPane.showMessageDialog(this, "Archivo '" + nombre + "' eliminado con éxito.", "Éxito", JOptionPane.INFORMATION_MESSAGE);
-            areaLog.append("Archivo eliminado: " + nombre + "\n");
+            JOptionPane.showMessageDialog(this, "'" + nombre + "' eliminado con éxito (y todo su contenido).", "Éxito", JOptionPane.INFORMATION_MESSAGE);
+            areaLog.append("Eliminado: " + nombre + "\n");
             actualizarPantallaCompleta(); // ¡La magia de redibujar todo!
         } else {
-            JOptionPane.showMessageDialog(this, "No se encontró el archivo '" + nombre + "'.", "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, "No se encontró nada con el nombre '" + nombre + "'.", "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
     

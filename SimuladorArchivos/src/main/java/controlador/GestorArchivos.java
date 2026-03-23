@@ -50,12 +50,11 @@ public class GestorArchivos {
     public Directorio getDirectorioRaiz() { return directorioRaiz; }
     private int posicionCabeza = 0; // La aguja siempre empieza en el bloque 0
 
-    // 3. Asegúrate de tener el getter y setter para la aguja del disco:
+    // Getter y setter para la aguja del disco:
     public int getPosicionCabeza() { return posicionCabeza; }
     public void setPosicionCabeza(int posicion) { this.posicionCabeza = posicion; }
     
     public void encolarSolicitudLectura(String nombreArchivo) {
-        // En un proyecto real, buscaríamos el bloqueInicial del archivo primero
         Proceso p = new Proceso("P" + contadorProcesos++, "LEER", nombreArchivo, 0);
         p.setEstado("Listo");
         colaProcesos.encolar(p);
@@ -71,7 +70,7 @@ public class GestorArchivos {
         // 2. Buscar bloques libres y ocuparlos (CON ASIGNACIÓN ENCADENADA)
         int bloquesAsignados = 0;
         int primerBloque = -1;
-        int bloqueAnterior = -1; // <-- NUEVO: Para llevar el rastro y enlazar
+        int bloqueAnterior = -1; 
         Bloque[] bloquesReales = disco.getBloques();
 
         for (int i = 0; i < disco.getCapacidad(); i++) {
@@ -80,14 +79,14 @@ public class GestorArchivos {
                 if (bloquesAsignados == 0) {
                     primerBloque = i; // Guardamos dónde empieza el archivo
                 } else {
-                    // NUEVO: Le decimos al bloque anterior que apunte a este nuevo bloque
+                    // Le decimos al bloque anterior que apunte a este nuevo bloque
                     bloquesReales[bloqueAnterior].setSiguienteBloque(i);
                 }
                 
                 bloquesReales[i].setLibre(false); // Lo marcamos como ocupado
                 bloquesReales[i].setArchivoAsignado(nombre); // Le damos el nombre para el tooltip
                 bloquesReales[i].setContenido("Datos de: " + nombre); 
-                bloquesReales[i].setSiguienteBloque(-1); // <-- NUEVO: Por defecto apunta a -1 (Fin de archivo)
+                bloquesReales[i].setSiguienteBloque(-1); // Por defecto apunta a -1 (Fin de archivo)
                 
                 bloqueAnterior = i; // Actualizamos el bloque anterior para la próxima iteración
                 bloquesAsignados++;
@@ -106,41 +105,69 @@ public class GestorArchivos {
         return true; // Éxito
     }
     
+    // --- NUEVO HELPER: Libera los bloques del disco de cualquier archivo ---
+    private void liberarBloquesArchivo(modelo.Archivo arch) {
+        Bloque[] bloquesReales = disco.getBloques();
+        int bloqueActual = arch.getBloqueInicial();
+        
+        while (bloqueActual != -1) {
+            int siguienteBloque = bloquesReales[bloqueActual].getSiguienteBloque();
+            bloquesReales[bloqueActual].setLibre(true);
+            bloquesReales[bloqueActual].setArchivoAsignado("Ninguno"); 
+            bloquesReales[bloqueActual].setContenido("");
+            bloquesReales[bloqueActual].setSiguienteBloque(-1);
+            bloqueActual = siguienteBloque;
+        }
+    }
+
+    // --- MODIFICADO: Eliminar archivo usando el Helper ---
     public boolean eliminarArchivo(String nombre) {
         estructuras.ListaEnlazada<modelo.Archivo> archivos = directorioRaiz.getArchivos();
         
-        // 1. Buscamos el archivo por su nombre en la lista de la carpeta raíz
         for (int i = 0; i < archivos.getTamano(); i++) {
             modelo.Archivo arch = archivos.obtener(i);
             
             if (arch.getNombre().equals(nombre)) {
-                // 2. Liberamos los bloques encadenados en el disco
-                Bloque[] bloquesReales = disco.getBloques();
-                
-                // Empezamos por la "cabeza" del archivo (el primer bloque)
-                int bloqueActual = arch.getBloqueInicial();
-                
-                // Recorremos la cadena hasta que encontremos el fin de archivo (-1)
-                while (bloqueActual != -1) {
-                    // Guardamos quién es el siguiente ANTES de borrar el actual
-                    int siguienteBloque = bloquesReales[bloqueActual].getSiguienteBloque();
-                    
-                    // "Limpiamos" el bloque actual y lo volvemos a poner gris
-                    bloquesReales[bloqueActual].setLibre(true);
-                    bloquesReales[bloqueActual].setArchivoAsignado("Ninguno"); 
-                    bloquesReales[bloqueActual].setContenido("");
-                    bloquesReales[bloqueActual].setSiguienteBloque(-1); // Reseteamos el apuntador
-                    
-                    // Saltamos al siguiente eslabón de la cadena
-                    bloqueActual = siguienteBloque;
-                }
-                
-                // 3. Finalmente, lo borramos de la carpeta (nuestra ListaEnlazada)
-                archivos.eliminar(i);
+                liberarBloquesArchivo(arch); // Limpiamos el disco físicamente
+                archivos.eliminar(i); // Lo borramos lógicamente de la carpeta
                 return true; // Éxito
             }
         }
         return false; // No se encontró el archivo
+    }
+
+    // --- NUEVO: Eliminar Directorio (Encuentra la carpeta) ---
+    public boolean eliminarDirectorio(String nombreDir) {
+        estructuras.ListaEnlazada<modelo.Directorio> subdirs = directorioRaiz.getSubdirectorios();
+        
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            modelo.Directorio dir = subdirs.obtener(i);
+            if (dir.getNombre().equals(nombreDir)) {
+                eliminarContenidoDirectorio(dir); // <--- Llama a la recursividad
+                subdirs.eliminar(i); // Finalmente borra la carpeta contenedora
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // --- NUEVO: La magia recursiva (El que hace el trabajo sucio en cascada) ---
+    private void eliminarContenidoDirectorio(modelo.Directorio dir) {
+        // 1. Borrar todos los archivos de esta carpeta y liberar sus bloques
+        estructuras.ListaEnlazada<modelo.Archivo> archivos = dir.getArchivos();
+        while (!archivos.estaVacia()) {
+            modelo.Archivo arch = archivos.obtener(0);
+            liberarBloquesArchivo(arch); // Limpia el disco
+            archivos.eliminar(0); // Lo quita de la lista
+        }
+
+        // 2. Entrar a las subcarpetas y hacer lo mismo recursivamente
+        estructuras.ListaEnlazada<modelo.Directorio> subdirs = dir.getSubdirectorios();
+        while (!subdirs.estaVacia()) {
+            modelo.Directorio subDir = subdirs.obtener(0);
+            eliminarContenidoDirectorio(subDir); // RECURSIVIDAD: Se llama a sí mismo
+            subdirs.eliminar(0);
+        }
     }
     
     public boolean crearDirectorio(String nombre) {
@@ -218,6 +245,7 @@ public class GestorArchivos {
         }
         return null; // Retorna null si no encontró el archivo
     }
+
     public void cambiarVelocidadDisco(int nuevaVelocidad) {
         if (this.planificador != null) {
             this.planificador.setVelocidad(nuevaVelocidad);
