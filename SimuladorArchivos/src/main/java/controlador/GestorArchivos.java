@@ -55,7 +55,8 @@ public class GestorArchivos {
     public void setPosicionCabeza(int posicion) { this.posicionCabeza = posicion; }
     
     public void encolarSolicitudLectura(String nombreArchivo) {
-        Proceso p = new Proceso("P" + contadorProcesos++, "LEER", nombreArchivo, 0);
+        // Para leer, el tamaño no importa, le pasamos 0
+        Proceso p = new Proceso("P" + contadorProcesos++, "LEER", nombreArchivo, 0, 0);
         p.setEstado("Listo");
         colaProcesos.encolar(p);
     }
@@ -230,7 +231,7 @@ public class GestorArchivos {
                 int bloqueDestino = arch.getBloqueInicial();
                 
                 // 1. Creamos un proceso simulando la solicitud de I/O
-                modelo.Proceso p = new modelo.Proceso("P" + contadorProcesos++, "LEER", nombre, bloqueDestino);
+                modelo.Proceso p = new modelo.Proceso("P" + contadorProcesos++, "LEER", nombre, bloqueDestino, 0);
                 p.setEstado("Listo"); // Estado inicial antes de entrar al disco
                 
                 // 2. Lo metemos en la cola de procesos para que el Planificador lo atienda
@@ -266,5 +267,37 @@ public class GestorArchivos {
             }
         }
         return null; // Si no lo encuentra o si está en una subcarpeta (versión simplificada)
+    }
+    
+    // --- NUEVO: Encolar creación ---
+    public String encolarSolicitudCreacion(String nombreArchivo, int tamano) {
+        // El bloque destino inicial será el 0 (Directorio raíz) para buscar espacio
+        Proceso p = new Proceso("P" + contadorProcesos++, "CREAR", nombreArchivo, 0, tamano);
+        p.setEstado("Listo");
+        colaProcesos.encolar(p);
+        actualizarColaVisual();
+        return "⏳ Solicitud de CREACIÓN enviada a la cola.";
+    }
+
+    // --- NUEVO: Encolar eliminación ---
+    public String encolarSolicitudEliminacion(String nombreArchivo) {
+        // Buscar el bloque destino (donde empieza)
+        int bloqueDestino = 0;
+        modelo.Archivo arch = buscarArchivoObj(nombreArchivo);
+        if (arch != null) {
+            bloqueDestino = arch.getBloqueInicial();
+        }
+        
+        Proceso p = new Proceso("P" + contadorProcesos++, "ELIMINAR", nombreArchivo, bloqueDestino, 0);
+        p.setEstado("Listo");
+        colaProcesos.encolar(p);
+        actualizarColaVisual();
+        return "⏳ Solicitud de ELIMINACIÓN enviada a la cola.";
+    }
+
+    public void refrescarPantallaCompleta() {
+        if (this.ventana != null) {
+            this.ventana.actualizarPantallaCompleta();
+        }
     }
 }

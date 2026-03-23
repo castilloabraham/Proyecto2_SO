@@ -168,10 +168,12 @@ public class Planificador extends Thread {
                     modelo.Archivo archivoObjetivo = gestor.buscarArchivoObj(procesoActual.getNombreArchivo());
                     boolean puedeEjecutar = true;
 
+                    // NOTA: Si es una creación, el archivo aún no existe, así que archivoObjetivo será null y puede ejecutar libremente.
                     if (archivoObjetivo != null) {
                         if (procesoActual.getTipoOperacion().equals("LEER")) {
                             puedeEjecutar = archivoObjetivo.intentarLeer();
                         } else {
+                            // ACTUALIZAR o ELIMINAR exigen lock exclusivo
                             puedeEjecutar = archivoObjetivo.intentarEscribir();
                         }
                     }
@@ -205,9 +207,26 @@ public class Planificador extends Thread {
                     Thread.sleep(velocidadMs); // El disco viaja... (Pausa que simula el hardware)
                     
                     gestor.setPosicionCabeza(destino);
-                    procesoActual.setEstado("Terminado");
                     
+                    boolean cambioEnDisco = false;
+                    
+                    if (procesoActual.getTipoOperacion().equals("CREAR")) {
+                        boolean exito = gestor.crearArchivo(procesoActual.getNombreArchivo(), procesoActual.getTamano(), "admin");
+                        if (exito) cambioEnDisco = true;
+                        
+                    } else if (procesoActual.getTipoOperacion().equals("ELIMINAR")) {
+                        boolean exito = gestor.eliminarArchivo(procesoActual.getNombreArchivo());
+                        if (!exito) {
+                            exito = gestor.eliminarDirectorio(procesoActual.getNombreArchivo());
+                        }
+                        if (exito) cambioEnDisco = true;
+                    }
+                    
+                    procesoActual.setEstado("Terminado");
+                    // =========================================================
 
+
+                    // --- LIBERAR LOS LOCKS AL TERMINAR ---
                     if (archivoObjetivo != null) {
                         if (procesoActual.getTipoOperacion().equals("LEER")) {
                             archivoObjetivo.terminarLeer();
@@ -217,12 +236,17 @@ public class Planificador extends Thread {
                     }
                     // =========================================================
 
-
                     String mensaje = "✅ [" + politicaActual + "] Atendió: " + procesoActual.getIdProceso() + 
-                 " | Viajó " + movimiento + " bloques hasta el bloque " + destino;
+                                     " | " + procesoActual.getTipoOperacion() + " " + procesoActual.getNombreArchivo() +
+                                     " | Viajó " + movimiento + " bloques.";
                     
                     gestor.imprimirEnLogVisual(mensaje); 
                     gestor.actualizarColaVisual();
+                    
+                    // Si se creó o borró algo, le pedimos al gestor que redibuje la pantalla
+                    if (cambioEnDisco) {
+                        gestor.refrescarPantallaCompleta();
+                    }
                     
                 } else {
                     Thread.sleep(200); // Descansa si no hay trabajo en la cola

@@ -404,7 +404,7 @@ public class VentanaPrincipal extends JFrame {
     }
 
     // Este método vuelve a dibujar el disco y la tabla para mostrar los cambios
-    private void actualizarPantallaCompleta() {
+    public void actualizarPantallaCompleta() {
         // --- 1. Refrescar Mapa de Disco ---
         panelDiscoBlocks.removeAll();
         modelo.Bloque[] bloquesReales = gestor.getDisco().getBloques();
