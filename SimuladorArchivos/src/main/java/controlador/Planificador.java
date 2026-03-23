@@ -135,7 +135,6 @@ public class Planificador extends Thread {
                         }
                         
                         // 2da Vuelta: Si no hay nadie adelante, el ascensor SALTA AL INICIO (0)
-                        // Buscamos el bloque que esté más cerca del 0 (el más bajo de todos)
                         if (procesoActual == null) {
                             int bloqueMasBajo = Integer.MAX_VALUE;
                             
@@ -161,10 +160,38 @@ public class Planificador extends Thread {
                         // --- FIN ALGORITMO C-SCAN ---
 
                     } else {
-                        procesoActual = cola.desencolar(); // Por si acaso
+                        procesoActual = cola.desencolar(); // Por si acaso (Default a FIFO)
                     }
                     // --- FIN DE LA LÓGICA DE POLÍTICAS ---
 
+
+                    // =========================================================
+                    // --- NUEVO: CONTROL DE CONCURRENCIA (LOCKS) ---
+                    // =========================================================
+                    modelo.Archivo archivoObjetivo = gestor.buscarArchivoObj(procesoActual.getNombreArchivo());
+                    boolean puedeEjecutar = true;
+
+                    if (archivoObjetivo != null) {
+                        if (procesoActual.getTipoOperacion().equals("LEER")) {
+                            puedeEjecutar = archivoObjetivo.intentarLeer();
+                        } else {
+                            puedeEjecutar = archivoObjetivo.intentarEscribir();
+                        }
+                    }
+
+                    if (!puedeEjecutar) {
+                        // El archivo está bloqueado, devolvemos el proceso a la cola
+                        procesoActual.setEstado("Bloqueado por Lock");
+                        cola.encolar(procesoActual);
+                        gestor.imprimirEnLogVisual("🔒 [" + procesoActual.getIdProceso() + "] Bloqueado: Esperando acceso a " + procesoActual.getNombreArchivo());
+                        gestor.actualizarColaVisual();
+                        Thread.sleep(500); // Pausa breve antes de intentar con el siguiente proceso
+                        continue; // SALTA de vuelta al inicio del while (No mueve el disco)
+                    }
+                    // =========================================================
+
+
+                    // Si pasó la verificación de los Locks, el proceso se ejecuta
                     procesoActual.setEstado("Ejecutando");
                     int destino = procesoActual.getBloqueDestino();
                     
@@ -178,19 +205,33 @@ public class Planificador extends Thread {
                     }
                     
                     gestor.actualizarColaVisual();
-                    Thread.sleep(velocidadMs); // El disco viaja...
+                    Thread.sleep(velocidadMs); // El disco viaja... (Pausa que simula el hardware)
                     
                     gestor.setPosicionCabeza(destino);
                     procesoActual.setEstado("Terminado");
                     
+
+                    // =========================================================
+                    // --- NUEVO: LIBERAR LOS LOCKS AL TERMINAR ---
+                    // =========================================================
+                    if (archivoObjetivo != null) {
+                        if (procesoActual.getTipoOperacion().equals("LEER")) {
+                            archivoObjetivo.terminarLeer();
+                        } else {
+                            archivoObjetivo.terminarEscribir();
+                        }
+                    }
+                    // =========================================================
+
+
                     String mensaje = "✅ [" + politicaActual + "] Atendió: " + procesoActual.getIdProceso() + 
-                                     " | Viajó " + movimiento + " bloques hasta el bloque " + destino;
+                 " | Viajó " + movimiento + " bloques hasta el bloque " + destino;
                     
                     gestor.imprimirEnLogVisual(mensaje); 
                     gestor.actualizarColaVisual();
                     
                 } else {
-                    Thread.sleep(200); // Descansa si no hay trabajo
+                    Thread.sleep(200); // Descansa si no hay trabajo en la cola
                 }
             } catch (InterruptedException e) {
                 System.out.println("⚠️ Hilo interrumpido.");

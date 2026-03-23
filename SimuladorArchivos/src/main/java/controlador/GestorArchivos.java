@@ -257,4 +257,14 @@ public class GestorArchivos {
             this.planificador.setPolitica(nuevaPolitica);
         }
     }
+    
+    public modelo.Archivo buscarArchivoObj(String nombre) {
+        estructuras.ListaEnlazada<modelo.Archivo> archivos = directorioRaiz.getArchivos();
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            if (archivos.obtener(i).getNombre().equals(nombre)) {
+                return archivos.obtener(i);
+            }
+        }
+        return null; // Si no lo encuentra o si está en una subcarpeta (versión simplificada)
+    }
 }
