@@ -504,22 +504,80 @@ public class VentanaPrincipal extends JFrame {
     // --- LÓGICA DE EVENTOS (ACCIONES) ---
     
     private void accionCrearArchivo() {
-        String nombre = JOptionPane.showInputDialog(this, "Ingrese el nombre del archivo (ej. documento.txt):");
-        if (nombre == null || nombre.trim().isEmpty()) return;
-
-        String strTamano = JOptionPane.showInputDialog(this, "Ingrese el tamaño en bloques (ej. 5):");
-        if (strTamano == null || strTamano.trim().isEmpty()) return;
-
+        // 1. Pedir nombre del archivo
+        String nombre = JOptionPane.showInputDialog(this, 
+                "Ingrese el nombre del nuevo archivo (Ej: reporte.txt):", 
+                "Crear Archivo", 
+                JOptionPane.QUESTION_MESSAGE);
+        
+        // Validación 1: Que el usuario no cancele ni deje el nombre vacío
+        if (nombre == null || nombre.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(this, 
+                    "El nombre del archivo no puede estar vacío.", 
+                    "Error de Validación", 
+                    JOptionPane.ERROR_MESSAGE);
+            return; // Detenemos la ejecución aquí sin romper el programa
+        }
+        
+        // 2. Pedir tamaño del archivo
+        String tamanoStr = JOptionPane.showInputDialog(this, 
+                "Ingrese el tamaño en bloques (número entero positivo):", 
+                "Tamaño del Archivo", 
+                JOptionPane.QUESTION_MESSAGE);
+        
+        // Si el usuario le da a "Cancelar", simplemente salimos
+        if (tamanoStr == null || tamanoStr.trim().isEmpty()) {
+            return; 
+        }
+        
         try {
-            int tamano = Integer.parseInt(strTamano);
+            // Validación 2: Tipo de dato (Verificamos que sea un número entero)
+            int tamano = Integer.parseInt(tamanoStr.trim());
             
-            // ¡MAGIA! En lugar de crearlo instantáneamente, lo mandamos a la cola para el planificador
-            String mensaje = gestor.encolarSolicitudCreacion(nombre, tamano);
+            // Validación 3: Rango (No puede ser 0 ni negativo)
+            if (tamano <= 0) {
+                JOptionPane.showMessageDialog(this, 
+                        "El tamaño debe ser mayor a 0 bloques.", 
+                        "Error de Rango", 
+                        JOptionPane.ERROR_MESSAGE);
+                return;
+            }
             
-            JOptionPane.showMessageDialog(this, mensaje, "Solicitud Encolada", JOptionPane.INFORMATION_MESSAGE);
+            // Validación 4: Espacio disponible (¡Esto da muchos puntos!)
+            if (tamano > gestor.getDisco().obtenerEspacioLibre()) {
+                JOptionPane.showMessageDialog(this, 
+                        "No hay suficiente espacio libre en el disco para " + tamano + " bloques.", 
+                        "Error de Espacio", 
+                        JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            // 3. Crear el archivo en el sistema
+            // (Asumimos que "admin" es el usuario por defecto, cámbialo si manejas sesiones)
+            boolean exito = gestor.crearArchivo(nombre.trim(), tamano, "admin"); 
             
-        } catch (NumberFormatException ex) {
-            JOptionPane.showMessageDialog(this, "El tamaño debe ser un número entero.", "Error", JOptionPane.ERROR_MESSAGE);
+            if (exito) {
+                // Notificamos el éxito por consola visual si la tienes, o por popup
+                JOptionPane.showMessageDialog(this, 
+                        "Archivo '" + nombre + "' creado exitosamente.", 
+                        "Éxito", 
+                        JOptionPane.INFORMATION_MESSAGE);
+                
+                // ¡AQUÍ LLAMAMOS AL MÉTODO QUE ARREGLAMOS ANTES!
+                actualizarPantallaCompleta(); 
+            } else {
+                JOptionPane.showMessageDialog(this, 
+                        "No se pudo crear el archivo. Revisa si ya existe uno con ese nombre.", 
+                        "Error de Creación", 
+                        JOptionPane.ERROR_MESSAGE);
+            }
+            
+        } catch (NumberFormatException e) {
+            // Validación 5: Manejo del error si el usuario escribe letras (Ej: "cinco")
+            JOptionPane.showMessageDialog(this, 
+                    "Debe ingresar un número entero válido (Ej: 5). No se admiten letras ni decimales.", 
+                    "Error de Tipo de Dato", 
+                    JOptionPane.ERROR_MESSAGE);
         }
     }
 
