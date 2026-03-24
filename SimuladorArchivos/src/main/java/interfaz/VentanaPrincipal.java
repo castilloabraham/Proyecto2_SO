@@ -592,7 +592,7 @@ public class VentanaPrincipal extends JFrame {
             return;
         }
 
-        String mensaje = gestor.encolarSolicitudEliminacion(nombre.trim());
+        String mensaje = gestor.encolarSolicitudEliminacion(nombre.trim(), usuarioActual, modoAdminActual);
         JOptionPane.showMessageDialog(this, mensaje, "Solicitud Encolada", JOptionPane.INFORMATION_MESSAGE);
     }
 
@@ -607,16 +607,8 @@ public class VentanaPrincipal extends JFrame {
             return;
         }
 
-        boolean exito = gestor.crearDirectorio(nombre.trim(), usuarioActual);
-        if (exito) {
-            agregarMensajeLog("📁 Directorio creado: " + nombre.trim());
-            actualizarPantallaCompleta();
-        } else {
-            JOptionPane.showMessageDialog(this,
-                    "No se pudo crear el directorio. Puede que ya exista uno con ese nombre.",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
-        }
+        String mensaje = gestor.encolarSolicitudCreacionDirectorio(nombre.trim(), usuarioActual);
+        JOptionPane.showMessageDialog(this, mensaje, "Solicitud Encolada", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void accionRenombrar() {
@@ -635,17 +627,8 @@ public class VentanaPrincipal extends JFrame {
             return;
         }
 
-        boolean exito = gestor.renombrarItem(nombreAntiguo.trim(), nombreNuevo.trim());
-        if (exito) {
-            JOptionPane.showMessageDialog(this, "Renombrado con éxito a: " + nombreNuevo.trim(), "Éxito", JOptionPane.INFORMATION_MESSAGE);
-            agregarMensajeLog("✏️ Renombrado: '" + nombreAntiguo.trim() + "' -> '" + nombreNuevo.trim() + "'");
-            actualizarPantallaCompleta();
-        } else {
-            JOptionPane.showMessageDialog(this,
-                    "No se encontró el elemento o el nombre nuevo ya existe.",
-                    "Error",
-                    JOptionPane.ERROR_MESSAGE);
-        }
+        String mensaje = gestor.encolarSolicitudActualizacion(nombreAntiguo.trim(), nombreNuevo.trim());
+        JOptionPane.showMessageDialog(this, mensaje, "Solicitud Encolada", JOptionPane.INFORMATION_MESSAGE);
     }
 
     private void accionEstadisticas() {
