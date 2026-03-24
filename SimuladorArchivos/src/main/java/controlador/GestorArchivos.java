@@ -446,4 +446,8 @@ public class GestorArchivos {
         imprimirEnLogVisual("🚀 Sistema recuperado y en línea.");
         refrescarPantallaCompleta();
     }
+    
+    public interfaz.VentanaPrincipal getVentana() {
+        return this.ventana;
+    }
 }

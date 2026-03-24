@@ -52,4 +52,12 @@ public class Archivo {
     public synchronized void terminarEscribir() {
         siendoEscrito = false; // Libera el lock exclusivo
     }
+    
+    public boolean isSiendoEscrito() {
+        return siendoEscrito;
+    }
+
+    public int getLectoresActivos() {
+        return lectoresActivos;
+    }
 }

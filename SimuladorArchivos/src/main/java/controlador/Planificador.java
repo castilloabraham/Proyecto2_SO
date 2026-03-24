@@ -206,6 +206,11 @@ public class Planificador extends Thread {
                     gestor.actualizarColaVisual();
                     Thread.sleep(velocidadMs); // El disco viaja... (Pausa que simula el hardware)
                     
+                    // Le avisa a la ventana que cambie el texto del cabezal
+                    if (gestor.getVentana() != null) {
+                        gestor.getVentana().actualizarPosicionCabezalEnVivo(destino);
+                    }
+                    
                     gestor.setPosicionCabeza(destino);
                     
                     boolean cambioEnDisco = false;
