@@ -37,6 +37,8 @@ public class VentanaPrincipal extends JFrame {
     private JButton btnEliminar;
     private JButton btnRenombrar;
     private JButton btnLeer;
+    private JButton btnExportarJson;
+    private JButton btnImportarJson;
 
     public VentanaPrincipal() {
         super("Simulador de Sistema de Archivos OS - [MODERNO]");
@@ -146,6 +148,16 @@ public class VentanaPrincipal extends JFrame {
         styleModernButton(btnLeer);
         btnLeer.addActionListener(e -> accionLeerArchivo()); 
         panel.add(btnLeer);
+        
+        btnExportarJson = new JButton("Exportar JSON");
+        styleModernButton(btnExportarJson);
+        btnExportarJson.addActionListener(e -> accionExportarJSON()); 
+        panel.add(btnExportarJson);
+        
+        btnImportarJson = new JButton("Importar JSON");
+        styleModernButton(btnImportarJson);
+        btnImportarJson.addActionListener(e -> accionImportarJSON()); 
+        panel.add(btnImportarJson);
         
         return panel;
     }
@@ -550,15 +562,56 @@ public class VentanaPrincipal extends JFrame {
         }
     }
     private void actualizarPermisos(boolean esAdmin) {
-    btnCrearArchivo.setEnabled(esAdmin);
-    btnCrearDirectorio.setEnabled(esAdmin);
-    btnEliminar.setEnabled(esAdmin);
-    btnRenombrar.setEnabled(esAdmin);
+        btnCrearArchivo.setEnabled(esAdmin);
+        btnCrearDirectorio.setEnabled(esAdmin);
+        btnEliminar.setEnabled(esAdmin);
+        btnRenombrar.setEnabled(esAdmin);
     
-    if(!esAdmin) {
-        areaLog.append("⚠️ Modo Usuario: Acceso restringido a solo lectura.\n");
-    } else {
-        areaLog.append("🔓 Modo Administrador: Acceso total habilitado.\n");
+        if(!esAdmin) {
+            areaLog.append("⚠️ Modo Usuario: Acceso restringido a solo lectura.\n");
+        } else {
+            areaLog.append("🔓 Modo Administrador: Acceso total habilitado.\n");
+        }
     }
-}
+    private void accionExportarJSON() {
+        // Abrimos la ventana exploradora de archivos
+        javax.swing.JFileChooser fileChooser = new javax.swing.JFileChooser();
+        fileChooser.setDialogTitle("Guardar estado del disco como JSON");
+        
+        int seleccion = fileChooser.showSaveDialog(this);
+        
+        if (seleccion == javax.swing.JFileChooser.APPROVE_OPTION) {
+            java.io.File archivoDestino = fileChooser.getSelectedFile();
+            String ruta = archivoDestino.getAbsolutePath();
+            
+            // Asegurarnos de que termine en .json
+            if (!ruta.toLowerCase().endsWith(".json")) {
+                ruta += ".json";
+            }
+            
+            // Llamamos al Gestor para que haga la magia
+            String mensaje = gestor.exportarAJson(ruta);
+            javax.swing.JOptionPane.showMessageDialog(this, mensaje, "Exportación", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+        }
+    }
+    
+    private void accionImportarJSON() {
+        javax.swing.JFileChooser fileChooser = new javax.swing.JFileChooser();
+        fileChooser.setDialogTitle("Cargar estado del disco desde JSON");
+        
+        int seleccion = fileChooser.showOpenDialog(this);
+        
+        if (seleccion == javax.swing.JFileChooser.APPROVE_OPTION) {
+            java.io.File archivoOrigen = fileChooser.getSelectedFile();
+            String ruta = archivoOrigen.getAbsolutePath();
+            
+            // Llamamos al Gestor para que lea el archivo
+            String mensaje = gestor.importarDeJson(ruta);
+            javax.swing.JOptionPane.showMessageDialog(this, mensaje, "Importación", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            
+            // ¡MUY IMPORTANTE! Refrescamos la pantalla para ver los archivos cargados
+            actualizarPantallaCompleta();
+            areaLog.append("📂 JSON cargado desde: " + archivoOrigen.getName() + "\n");
+        }
+    }
 }

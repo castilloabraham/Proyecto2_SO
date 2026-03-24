@@ -6,6 +6,14 @@ import modelo.Directorio;
 import modelo.Disco;
 import estructuras.Cola;
 import modelo.Proceso;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import java.io.FileWriter;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import java.io.FileReader;
 
 public class GestorArchivos {
     
@@ -298,6 +306,82 @@ public class GestorArchivos {
     public void refrescarPantallaCompleta() {
         if (this.ventana != null) {
             this.ventana.actualizarPantallaCompleta();
+        }
+    }
+    public String exportarAJson(String rutaArchivo) {
+        try {
+            // 1. Creamos un arreglo JSON donde guardaremos los archivos
+            JsonArray listaArchivosJson = new JsonArray();
+            
+            // 2. Obtenemos los archivos de tu directorio raíz
+            estructuras.ListaEnlazada<modelo.Archivo> archivos = directorioRaiz.getArchivos();
+            
+            // 3. Recorremos la lista y metemos cada archivo al JSON
+            for (int i = 0; i < archivos.getTamano(); i++) {
+                modelo.Archivo arch = archivos.obtener(i);
+                
+                JsonObject archivoJson = new JsonObject();
+                archivoJson.addProperty("nombre", arch.getNombre());
+                archivoJson.addProperty("bloqueInicial", arch.getBloqueInicial());
+                
+                archivoJson.addProperty("tamano", arch.getTamañoEnBloques()); 
+                // -------------------------------------------
+                
+                listaArchivosJson.add(archivoJson);
+            }
+
+            // 4. Configuramos Gson para que el archivo se vea bonito (con saltos de línea)
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            
+            // 5. Escribimos el archivo en la computadora
+            try (FileWriter writer = new FileWriter(rutaArchivo)) {
+                gson.toJson(listaArchivosJson, writer);
+            }
+            
+            return "✅ Estado guardado correctamente en:\n" + rutaArchivo;
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "❌ Error al guardar JSON: " + e.getMessage();
+        }
+    }
+    
+    public String importarDeJson(String rutaArchivo) {
+        try (FileReader reader = new FileReader(rutaArchivo)) {
+            // 1. Leemos el archivo y lo convertimos en un Arreglo JSON
+            JsonElement elementoRaiz = JsonParser.parseReader(reader);
+            JsonArray listaArchivosJson = elementoRaiz.getAsJsonArray();
+
+            int archivosImportados = 0;
+
+            // 2. Recorremos cada archivo dentro del JSON
+            for (JsonElement elemento : listaArchivosJson) {
+                JsonObject archivoJson = elemento.getAsJsonObject();
+                
+                // Extraemos los datos (Asegúrate de que las preparadoras usen estos nombres, 
+                // o cámbialos aquí si te dan un formato específico)
+                String nombre = archivoJson.get("nombre").getAsString();
+                
+                // Por defecto le damos 1 bloque si el JSON no trae tamaño
+                int tamano = 1; 
+                if (archivoJson.has("tamano")) {
+                    tamano = archivoJson.get("tamano").getAsInt();
+                } else if (archivoJson.has("tamaño")) {
+                    tamano = archivoJson.get("tamaño").getAsInt();
+                }
+
+                // 3. Recreamos el archivo en tu simulador usando tu método
+                boolean exito = crearArchivo(nombre, tamano, "admin");
+                if (exito) {
+                    archivosImportados++;
+                }
+            }
+            
+            return "✅ Se importaron " + archivosImportados + " archivos correctamente.";
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "❌ Error al importar JSON: Asegúrate de que el formato sea correcto.\nDetalle: " + e.getMessage();
         }
     }
 }
