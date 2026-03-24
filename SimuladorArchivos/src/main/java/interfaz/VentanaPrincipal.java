@@ -47,6 +47,7 @@ public class VentanaPrincipal extends JFrame {
     private JButton btnExportarJson;
     private JButton btnImportarJson;
     private JLabel lblCabezaActual;
+    private JLabel lblEspacioLibre;
 
     public VentanaPrincipal() {
         super("Simulador de Sistema de Archivos OS - [MODERNO]");
@@ -302,12 +303,16 @@ public class VentanaPrincipal extends JFrame {
         scrollDisco.setBorder(null);
         panel.add(scrollDisco, BorderLayout.CENTER);
 
+        // --- AQUÍ ESTÁ LA CORRECCIÓN LIMPIA ---
         JPanel panelStatus = new JPanel(new FlowLayout(FlowLayout.CENTER));
         panelStatus.setOpaque(false);
-        JLabel lblStatus = new JLabel("Espacio Libre: " + discoReal.obtenerEspacioLibre() + " / " + totalBloques + " bloques");
-        lblStatus.setFont(FUENTE_TITULO);
-        lblStatus.setForeground(COLOR_ACCENTO);
-        panelStatus.add(lblStatus);
+        
+        // Usamos la variable global lblEspacioLibre que debiste declarar al inicio de la clase
+        lblEspacioLibre = new JLabel("Espacio Libre: " + discoReal.obtenerEspacioLibre() + " / " + totalBloques + " bloques");
+        lblEspacioLibre.setFont(FUENTE_TITULO);
+        lblEspacioLibre.setForeground(COLOR_ACCENTO);
+        
+        panelStatus.add(lblEspacioLibre);
         panel.add(panelStatus, BorderLayout.SOUTH);
 
         return panel;
@@ -437,6 +442,8 @@ public class VentanaPrincipal extends JFrame {
     }
 
     public void actualizarPantallaCompleta() {
+        
+        SwingUtilities.invokeLater(() -> {
         // --- 1. Refrescar Mapa de Disco ---
         panelDiscoBlocks.removeAll();
         modelo.Bloque[] bloquesReales = gestor.getDisco().getBloques();
@@ -449,13 +456,11 @@ public class VentanaPrincipal extends JFrame {
                 block.setBackground(new Color(60, 65, 75)); // Gris
                 block.setToolTipText("Bloque " + i + ": Libre"); 
             } else {
-                // MAGIA AQUÍ: Generar un color único basado en el nombre del archivo
                 String nombreArch = bloquesReales[i].getArchivoAsignado();
                 int hash = Math.abs(nombreArch.hashCode());
                 int r = (hash & 0xFF0000) >> 16;
                 int g = (hash & 0x00FF00) >> 8;
                 int b = hash & 0x0000FF;
-                // Aclaramos un poco el color para que no sea muy oscuro
                 Color colorArchivo = new Color(r % 150 + 100, g % 150 + 100, b % 150 + 100);
                 
                 block.setBackground(colorArchivo);
@@ -470,43 +475,30 @@ public class VentanaPrincipal extends JFrame {
         }
         panelDiscoBlocks.revalidate();
         panelDiscoBlocks.repaint();
+        if (lblEspacioLibre != null) {
+            lblEspacioLibre.setText("Espacio Libre: " + gestor.getDisco().obtenerEspacioLibre() + " / " + gestor.getDisco().getCapacidad() + " bloques");
+        }
 
         // --- 2. Refrescar Tabla de Asignación ---
         modeloTabla.setRowCount(0); 
-        modelo.Directorio raiz = gestor.getDirectorioRaiz();
-        estructuras.ListaEnlazada<modelo.Archivo> archivos = raiz.getArchivos();
-        
-        for (int i = 0; i < archivos.getTamano(); i++) {
-            modelo.Archivo arch = archivos.obtener(i);
-            
-            String estadoLock = "Libre";
-            if (arch.isSiendoEscrito()) estadoLock = "🔒 Escribiendo (Exclusivo)";
-            else if (arch.getLectoresActivos() > 0) estadoLock = "👁️ Leyendo (" + arch.getLectoresActivos() + ")";
-
-            modeloTabla.addRow(new Object[]{
-                arch.getNombre(), arch.getPropietario(), arch.getTamañoEnBloques(), arch.getBloqueInicial(), estadoLock
-            });
-        }
+        // Llamamos al nuevo método recursivo para que lea TODAS las carpetas
+        llenarTablaRecursiva(gestor.getDirectorioRaiz());
 
         // --- 3. Refrescar Árbol de Directorios (JTree) ---
         DefaultMutableTreeNode raizNode = (DefaultMutableTreeNode) arbolDirectorios.getModel().getRoot();
         raizNode.removeAllChildren(); 
         
-        estructuras.ListaEnlazada<modelo.Directorio> subdirs = raiz.getSubdirectorios();
-        for (int i = 0; i < subdirs.getTamano(); i++) {
-            modelo.Directorio dir = subdirs.obtener(i);
-            raizNode.add(new DefaultMutableTreeNode("📁 " + dir.getNombre())); 
-        }
-
-        for (int i = 0; i < archivos.getTamano(); i++) {
-            modelo.Archivo arch = archivos.obtener(i);
-            raizNode.add(new DefaultMutableTreeNode("📄 " + arch.getNombre() + " [" + arch.getTamañoEnBloques() + " blk]")); 
-        }
+        // Usamos el método recursivo desde la raíz
+        construirArbolRecursivo(gestor.getDirectorioRaiz(), raizNode);
         
         ((DefaultTreeModel) arbolDirectorios.getModel()).reload();
+        
+        // Expandimos todas las carpetas automáticamente para que se vea bien
         for (int i = 0; i < arbolDirectorios.getRowCount(); i++) {
             arbolDirectorios.expandRow(i);
         }
+        
+        });
     }
 
     // --- LÓGICA DE EVENTOS (ACCIONES) ---
@@ -642,6 +634,51 @@ public class VentanaPrincipal extends JFrame {
                 lblCabezaActual.setText("Cabezal: Bloque " + posicion);
             }
         });
+    }
+    
+    // Método recursivo para construir el árbol sin importar cuántas carpetas haya adentro
+    private void construirArbolRecursivo(modelo.Directorio dirActual, DefaultMutableTreeNode nodoActual) {
+        
+        // 1. Primero agregamos las subcarpetas de este nivel
+        estructuras.ListaEnlazada<modelo.Directorio> subdirs = dirActual.getSubdirectorios();
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            modelo.Directorio subDir = subdirs.obtener(i);
+            DefaultMutableTreeNode nodoSubDir = new DefaultMutableTreeNode("📁 " + subDir.getNombre());
+            nodoActual.add(nodoSubDir);
+            
+            // ¡La Magia! Nos llamamos a nosotros mismos para buscar qué hay dentro de esta subcarpeta
+            construirArbolRecursivo(subDir, nodoSubDir); 
+        }
+
+        // 2. Luego agregamos los archivos sueltos de este nivel
+        estructuras.ListaEnlazada<modelo.Archivo> archivos = dirActual.getArchivos();
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            modelo.Archivo arch = archivos.obtener(i);
+            nodoActual.add(new DefaultMutableTreeNode("📄 " + arch.getNombre() + " [" + arch.getTamañoEnBloques() + " blk]")); 
+        }
+    }
+    
+    // Método recursivo para que la Tabla FAT encuentre los archivos en TODAS las subcarpetas
+    private void llenarTablaRecursiva(modelo.Directorio dirActual) {
+        estructuras.ListaEnlazada<modelo.Archivo> archivos = dirActual.getArchivos();
+        
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            modelo.Archivo arch = archivos.obtener(i);
+            
+            String estadoLock = "Libre";
+            if (arch.isSiendoEscrito()) estadoLock = "🔒 Escribiendo (Exclusivo)";
+            else if (arch.getLectoresActivos() > 0) estadoLock = "👁️ Leyendo (" + arch.getLectoresActivos() + ")";
+
+            modeloTabla.addRow(new Object[]{
+                arch.getNombre(), arch.getPropietario(), arch.getTamañoEnBloques(), arch.getBloqueInicial(), estadoLock
+            });
+        }
+        
+        // Buscar en las subcarpetas
+        estructuras.ListaEnlazada<modelo.Directorio> subdirs = dirActual.getSubdirectorios();
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            llenarTablaRecursiva(subdirs.obtener(i));
+        }
     }
 
     public static void main(String[] args) {

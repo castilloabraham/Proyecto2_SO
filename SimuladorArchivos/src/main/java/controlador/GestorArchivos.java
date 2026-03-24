@@ -51,7 +51,26 @@ public class GestorArchivos {
         if (this.ventana != null) {
             StringBuilder sb = new StringBuilder();
             sb.append("=== COLA DE PROCESOS (I/O) ===\n");
-            sb.append("Esperando para usar el disco: ").append(colaProcesos.getTamano()).append(" procesos.\n");
+            sb.append("Total esperando: ").append(colaProcesos.getTamano()).append("\n\n");
+            
+            // Recorremos la cola para mostrar los estados reales
+            for (int i = 0; i < colaProcesos.getTamano(); i++) {
+                Proceso p = colaProcesos.desencolar();
+                
+                // Formateamos cómo se ve cada proceso en la pantalla
+                sb.append(" ⚙️ [").append(p.getIdProceso()).append("] ");
+                sb.append(p.getTipoOperacion()).append(" '").append(p.getNombreArchivo()).append("' ");
+                sb.append("-> Destino: Blk ").append(p.getBloqueDestino());
+                
+                if(p.getEstado().contains("Bloqueado")) {
+                    sb.append(" (🔒 BLOQUEADO)\n");
+                } else {
+                    sb.append(" (⏳ ").append(p.getEstado()).append(")\n");
+                }
+                
+                colaProcesos.encolar(p); // Lo volvemos a meter para no perderlo
+            }
+            
             this.ventana.actualizarPantallaProcesos(sb.toString());
         }
     }
@@ -367,7 +386,11 @@ public class GestorArchivos {
                     String name = fileObj.get("name").getAsString();
                     int blocks = fileObj.get("blocks").getAsInt();
                     
-                    this.crearArchivo(name, blocks, "admin");
+                    // Transformamos la 'key' del JSON (ej: "11") a un entero
+                    int bloqueInicial = Integer.parseInt(key); 
+                    
+                    // Usamos el nuevo método forzado
+                    this.crearArchivoForzado(name, blocks, bloqueInicial, "admin");
                 }
                 imprimirEnLogVisual("📂 System Files cargados correctamente.");
             }
@@ -449,5 +472,31 @@ public class GestorArchivos {
     
     public interfaz.VentanaPrincipal getVentana() {
         return this.ventana;
+    }
+    
+    // Nuevo método para forzar la creación de un archivo en un bloque específico (Para el JSON)
+    public boolean crearArchivoForzado(String nombre, int tamano, int bloqueInicial, String propietario) {
+        Bloque[] bloquesReales = disco.getBloques();
+        
+        // Asignación encadenada desde el bloqueInicial
+        int bloqueAnterior = -1;
+        for (int i = 0; i < tamano; i++) {
+            int actual = bloqueInicial + i;
+            
+            if (bloqueAnterior != -1) {
+                bloquesReales[bloqueAnterior].setSiguienteBloque(actual);
+            }
+            
+            bloquesReales[actual].setLibre(false);
+            bloquesReales[actual].setArchivoAsignado(nombre);
+            bloquesReales[actual].setContenido("Datos sistema: " + nombre); 
+            bloquesReales[actual].setSiguienteBloque(-1);
+            
+            bloqueAnterior = actual;
+        }
+
+        Archivo nuevoArchivo = new Archivo(nombre, tamano, bloqueInicial, propietario);
+        directorioRaiz.agregarArchivo(nuevoArchivo);
+        return true;
     }
 }
