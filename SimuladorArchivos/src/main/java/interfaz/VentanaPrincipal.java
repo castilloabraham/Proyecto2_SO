@@ -390,7 +390,7 @@ public class VentanaPrincipal extends JFrame {
     }
     // --- LÓGICA DE EVENTOS (ACCIONES) ---
     private void accionCrearArchivo() {
-        // 1. Pedir datos al usuario con ventanitas (Dialogs)
+        // 1. Pedir datos al usuario
         String nombre = JOptionPane.showInputDialog(this, "Ingrese el nombre del archivo (ej. documento.txt):");
         if (nombre == null || nombre.trim().isEmpty()) return;
 
@@ -400,16 +400,14 @@ public class VentanaPrincipal extends JFrame {
         try {
             int tamano = Integer.parseInt(strTamano);
             
-            // 2. Llamar al Gestor (Cerebro)
-            boolean exito = gestor.crearArchivo(nombre, tamano, "admin");
+            // 2. ¡LA MAGIA! En lugar de crearlo instantáneamente, lo mandamos a la cola
+            // El hilo del Planificador (la aguja del disco) lo sacará de la cola, 
+            // viajará por el disco simulando el tiempo, y lo creará físicamente.
+            String mensaje = gestor.encolarSolicitudCreacion(nombre, tamano);
             
-            if (exito) {
-                JOptionPane.showMessageDialog(this, "Archivo creado con éxito.", "Éxito", JOptionPane.INFORMATION_MESSAGE);
-                areaLog.append("Archivo creado: " + nombre + " (" + tamano + " bloques)\n");
-                actualizarPantallaCompleta(); // 3. Refrescar los dibujos
-            } else {
-                JOptionPane.showMessageDialog(this, "No hay espacio suficiente en el disco.", "Error", JOptionPane.ERROR_MESSAGE);
-            }
+            // Avisamos al usuario que la orden fue recibida
+            JOptionPane.showMessageDialog(this, mensaje, "Solicitud Encolada", JOptionPane.INFORMATION_MESSAGE);
+            
         } catch (NumberFormatException ex) {
             JOptionPane.showMessageDialog(this, "El tamaño debe ser un número entero.", "Error", JOptionPane.ERROR_MESSAGE);
         }
@@ -491,22 +489,11 @@ public class VentanaPrincipal extends JFrame {
         String nombre = JOptionPane.showInputDialog(this, "Ingrese el nombre del archivo o carpeta a eliminar:");
         if (nombre == null || nombre.trim().isEmpty()) return;
 
-        // 2. Intentar borrar como archivo primero
-        boolean exito = gestor.eliminarArchivo(nombre);
+        // 2. En lugar de borrarlo instantáneamente, lo mandamos a la cola de I/O
+        String mensaje = gestor.encolarSolicitudEliminacion(nombre);
         
-        // 3. Si no era un archivo, intentar borrar como directorio
-        if (!exito) {
-            exito = gestor.eliminarDirectorio(nombre);
-        }
-
-        // 4. Mostrar resultado y refrescar
-        if (exito) {
-            JOptionPane.showMessageDialog(this, "'" + nombre + "' eliminado con éxito (y todo su contenido).", "Éxito", JOptionPane.INFORMATION_MESSAGE);
-            areaLog.append("Eliminado: " + nombre + "\n");
-            actualizarPantallaCompleta(); // ¡La magia de redibujar todo!
-        } else {
-            JOptionPane.showMessageDialog(this, "No se encontró nada con el nombre '" + nombre + "'.", "Error", JOptionPane.ERROR_MESSAGE);
-        }
+        // Avisamos al usuario
+        JOptionPane.showMessageDialog(this, mensaje, "Solicitud Encolada", JOptionPane.INFORMATION_MESSAGE);
     }
     
     private void accionCrearDirectorio() {
