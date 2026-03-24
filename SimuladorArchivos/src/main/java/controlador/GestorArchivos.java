@@ -269,7 +269,7 @@ public class GestorArchivos {
             return false;
         }
 
-        Directorio nuevoDir = new Directorio(nombre);
+        Directorio nuevoDir = new Directorio(nombre, propietario);
         directorioRaiz.agregarSubdirectorio(nuevoDir);
         return true;
     }
