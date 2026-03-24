@@ -11,6 +11,8 @@ public class Proceso {
     private String propietarioSolicitante;
     private boolean directorioObjetivo;
     private String directorioPadre;
+    private boolean esperandoLock;
+    private int reintentosLock;
 
     public Proceso(String idProceso, String tipoOperacion, String nombreArchivo, int bloqueDestino, int tamano) {
         this.idProceso = idProceso;
@@ -23,6 +25,8 @@ public class Proceso {
         this.propietarioSolicitante = "admin";
         this.directorioObjetivo = false;
         this.directorioPadre = "raiz";
+        this.esperandoLock = false;
+        this.reintentosLock = 0;
     }
 
     public String getIdProceso() { return idProceso; }
@@ -55,10 +59,18 @@ public class Proceso {
         this.directorioPadre = (directorioPadre == null || directorioPadre.isBlank()) ? "raiz" : directorioPadre;
     }
 
+    public boolean isEsperandoLock() { return esperandoLock; }
+    public void setEsperandoLock(boolean esperandoLock) { this.esperandoLock = esperandoLock; }
+
+    public int getReintentosLock() { return reintentosLock; }
+    public void incrementarReintentosLock() { this.reintentosLock++; }
+    public void reiniciarReintentosLock() { this.reintentosLock = 0; }
+
     @Override
     public String toString() {
         String extra = (nombreNuevo != null && !nombreNuevo.isBlank()) ? (" -> " + nombreNuevo) : "";
         String padre = (directorioPadre != null && !directorioPadre.isBlank()) ? (" @" + directorioPadre) : "";
-        return idProceso + " [" + tipoOperacion + " " + nombreArchivo + extra + padre + "] - " + estado;
+        String espera = esperandoLock ? (" [lock x" + reintentosLock + "]") : "";
+        return idProceso + " [" + tipoOperacion + " " + nombreArchivo + extra + padre + "] - " + estado + espera;
     }
 }

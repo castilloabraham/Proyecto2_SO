@@ -7,11 +7,14 @@ import modelo.Proceso;
 
 public class Planificador extends Thread {
 
+    private static final int MAX_PROCESOS_CONCURRENTES = 3;
+
     private final GestorArchivos gestor;
-    private boolean ejecutando = true;
-    private int velocidadMs = 500;
-    private String politicaActual = "FIFO";
+    private volatile boolean ejecutando = true;
+    private volatile int velocidadMs = 500;
+    private volatile String politicaActual = "FIFO";
     private boolean moviendoDerecha = true;
+    private int procesosActivos = 0;
 
     public Planificador(GestorArchivos gestor) {
         this.gestor = gestor;
@@ -39,69 +42,115 @@ public class Planificador extends Thread {
                 Cola<Proceso> cola = gestor.getColaProcesos();
 
                 if (cola == null || cola.estaVacia()) {
-                    Thread.sleep(200);
+                    Thread.sleep(150);
+                    continue;
+                }
+
+                if (obtenerProcesosActivos() >= MAX_PROCESOS_CONCURRENTES) {
+                    Thread.sleep(120);
                     continue;
                 }
 
                 Proceso procesoActual = seleccionarProceso(cola, gestor.getPosicionCabeza());
                 if (procesoActual == null) {
-                    Thread.sleep(150);
+                    Thread.sleep(120);
                     continue;
                 }
 
-                Archivo archivoObjetivo = gestor.buscarArchivoObj(procesoActual.getNombreArchivo());
-                boolean puedeEjecutar = adquirirLockSiAplica(procesoActual, archivoObjetivo);
-
-                if (!puedeEjecutar) {
-                    procesoActual.setEstado("Bloqueado por Lock");
-                    cola.encolar(procesoActual);
-                    gestor.imprimirEnLogVisual("🔒 [" + procesoActual.getIdProceso() + "] Bloqueado: Esperando acceso a " + procesoActual.getNombreArchivo());
-                    gestor.actualizarColaVisual();
-                    Thread.sleep(300);
-                    continue;
-                }
-
-                procesoActual.setEstado("Ejecutando");
                 int posicionActual = gestor.getPosicionCabeza();
                 int destino = procesoActual.getBloqueDestino();
                 int movimiento = calcularMovimiento(posicionActual, destino);
 
+                procesoActual.setEstado("Despachado");
                 gestor.actualizarColaVisual();
                 Thread.sleep(velocidadMs);
 
                 if (gestor.getVentana() != null) {
                     gestor.getVentana().actualizarPosicionCabezalEnVivo(destino);
                 }
-
                 gestor.setPosicionCabeza(destino);
 
-                boolean cambioEnDisco = ejecutarOperacion(procesoActual, archivoObjetivo);
-                procesoActual.setEstado("Terminado");
-
-                liberarLockSiAplica(procesoActual, archivoObjetivo);
-
-                String mensaje = "✅ [" + politicaActual + "] Atendió: " + procesoActual.getIdProceso()
-                        + " | " + procesoActual.getTipoOperacion() + " " + procesoActual.getNombreArchivo()
-                        + ((procesoActual.getNombreNuevo() != null && !procesoActual.getNombreNuevo().isBlank()) ? (" -> " + procesoActual.getNombreNuevo()) : "")
-                        + " | Viajó " + movimiento + " bloques.";
-
-                gestor.imprimirEnLogVisual(mensaje);
-                gestor.actualizarColaVisual();
-
-                if (cambioEnDisco) {
-                    gestor.refrescarPantallaCompleta();
-                }
+                lanzarWorker(procesoActual, movimiento);
 
             } catch (InterruptedException e) {
                 if (!ejecutando) {
                     return;
                 }
-                System.out.println("⚠️ Hilo interrumpido.");
+                System.out.println("⚠️ Hilo del planificador interrumpido.");
             } catch (Exception e) {
                 System.out.println("❌ ERROR FATAL EN EL PLANIFICADOR:");
                 e.printStackTrace();
             }
         }
+    }
+
+    private void lanzarWorker(Proceso procesoActual, int movimiento) {
+        incrementarProcesosActivos();
+
+        Thread worker = new Thread(() -> {
+            Archivo archivoObjetivo = gestor.buscarArchivoObj(procesoActual.getNombreArchivo());
+            boolean lockAdquirido = false;
+            boolean cambioEnDisco = false;
+
+            try {
+                lockAdquirido = esperarYAdquirirLock(procesoActual, archivoObjetivo);
+                if (!lockAdquirido && requiereLock(procesoActual, archivoObjetivo)) {
+                    procesoActual.setEstado("Cancelado");
+                    return;
+                }
+
+                procesoActual.setEstado("Ejecutando");
+                gestor.refrescarPantallaCompleta();
+                Thread.sleep(calcularTiempoServicio(procesoActual));
+
+                cambioEnDisco = ejecutarOperacion(procesoActual, archivoObjetivo);
+                procesoActual.setEstado("Terminado");
+
+                String mensaje = "✅ [" + politicaActual + "] Atendió: " + procesoActual.getIdProceso()
+                        + " | " + procesoActual.getTipoOperacion() + " " + procesoActual.getNombreArchivo()
+                        + ((procesoActual.getNombreNuevo() != null && !procesoActual.getNombreNuevo().isBlank())
+                        ? (" -> " + procesoActual.getNombreNuevo()) : "")
+                        + " | Viajó " + movimiento + " bloques.";
+                gestor.imprimirEnLogVisual(mensaje);
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                procesoActual.setEstado("Interrumpido");
+            } catch (Exception e) {
+                procesoActual.setEstado("Error");
+                gestor.imprimirEnLogVisual("❌ Error ejecutando " + procesoActual.getIdProceso() + ": " + e.getMessage());
+                e.printStackTrace();
+            } finally {
+                try {
+                    liberarLockSiAplica(procesoActual, archivoObjetivo, lockAdquirido);
+                } finally {
+                    decrementarProcesosActivos();
+                    gestor.actualizarColaVisual();
+                    if (cambioEnDisco) {
+                        gestor.refrescarPantallaCompleta();
+                    } else {
+                        gestor.refrescarPantallaCompleta();
+                    }
+                }
+            }
+        }, "worker-" + procesoActual.getIdProceso());
+
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private synchronized void incrementarProcesosActivos() {
+        procesosActivos++;
+    }
+
+    private synchronized void decrementarProcesosActivos() {
+        if (procesosActivos > 0) {
+            procesosActivos--;
+        }
+    }
+
+    private synchronized int obtenerProcesosActivos() {
+        return procesosActivos;
     }
 
     private Proceso seleccionarProceso(Cola<Proceso> cola, int posicionActual) {
@@ -236,26 +285,94 @@ public class Planificador extends Thread {
         return seleccionado;
     }
 
-    private boolean adquirirLockSiAplica(Proceso procesoActual, Archivo archivoObjetivo) {
-        if (archivoObjetivo == null) {
+    private boolean esperarYAdquirirLock(Proceso procesoActual, Archivo archivoObjetivo) throws InterruptedException {
+        if (!requiereLock(procesoActual, archivoObjetivo)) {
             return true;
         }
 
-        String tipo = procesoActual.getTipoOperacion();
-        if ("LEER".equals(tipo) || "READ".equals(tipo)) {
-            return archivoObjetivo.intentarLeer();
+        boolean escritura = esOperacionDeEscritura(procesoActual);
+        registrarEsperaSiAplica(procesoActual, archivoObjetivo, escritura);
+
+        while (ejecutando) {
+            boolean adquirido = escritura ? archivoObjetivo.intentarEscribir() : archivoObjetivo.intentarLeer();
+
+            if (adquirido) {
+                cancelarEsperaSiAplica(procesoActual, archivoObjetivo, escritura);
+                procesoActual.setEstado(escritura ? "Ejecutando (lock escritura)" : "Ejecutando (lock lectura)");
+                gestor.imprimirEnLogVisual("🔓 [" + procesoActual.getIdProceso() + "] Lock concedido sobre " + procesoActual.getNombreArchivo());
+                gestor.refrescarPantallaCompleta();
+                return true;
+            }
+
+            procesoActual.setEstado("Bloqueado por Lock");
+            procesoActual.incrementarReintentosLock();
+            if (procesoActual.getReintentosLock() == 1 || procesoActual.getReintentosLock() % 4 == 0) {
+                gestor.imprimirEnLogVisual("🔒 [" + procesoActual.getIdProceso() + "] Esperando lock sobre "
+                        + procesoActual.getNombreArchivo() + " (intento " + procesoActual.getReintentosLock() + ")");
+            }
+            gestor.refrescarPantallaCompleta();
+            Thread.sleep(250);
         }
 
-        if ("ELIMINAR".equals(tipo) || "DELETE".equals(tipo)
-                || "ACTUALIZAR".equals(tipo) || "UPDATE".equals(tipo)) {
-            return archivoObjetivo.intentarEscribir();
-        }
-
-        return true;
+        cancelarEsperaSiAplica(procesoActual, archivoObjetivo, escritura);
+        return false;
     }
 
-    private void liberarLockSiAplica(Proceso procesoActual, Archivo archivoObjetivo) {
-        if (archivoObjetivo == null) {
+    private void registrarEsperaSiAplica(Proceso procesoActual, Archivo archivoObjetivo, boolean escritura) {
+        if (archivoObjetivo == null || procesoActual.isEsperandoLock()) {
+            return;
+        }
+
+        if (escritura) {
+            archivoObjetivo.registrarEsperaEscritura();
+        } else {
+            archivoObjetivo.registrarEsperaLectura();
+        }
+
+        procesoActual.setEsperandoLock(true);
+        procesoActual.reiniciarReintentosLock();
+        gestor.refrescarPantallaCompleta();
+    }
+
+    private void cancelarEsperaSiAplica(Proceso procesoActual, Archivo archivoObjetivo, boolean escritura) {
+        if (archivoObjetivo == null || !procesoActual.isEsperandoLock()) {
+            return;
+        }
+
+        if (escritura) {
+            archivoObjetivo.cancelarEsperaEscritura();
+        } else {
+            archivoObjetivo.cancelarEsperaLectura();
+        }
+
+        procesoActual.setEsperandoLock(false);
+        procesoActual.reiniciarReintentosLock();
+        gestor.refrescarPantallaCompleta();
+    }
+
+    private boolean requiereLock(Proceso procesoActual, Archivo archivoObjetivo) {
+        if (archivoObjetivo == null || procesoActual == null || procesoActual.isDirectorioObjetivo()) {
+            return false;
+        }
+
+        String tipo = procesoActual.getTipoOperacion();
+        return "LEER".equals(tipo) || "READ".equals(tipo)
+                || "ELIMINAR".equals(tipo) || "DELETE".equals(tipo)
+                || "ACTUALIZAR".equals(tipo) || "UPDATE".equals(tipo);
+    }
+
+    private boolean esOperacionDeEscritura(Proceso procesoActual) {
+        if (procesoActual == null) {
+            return false;
+        }
+
+        String tipo = procesoActual.getTipoOperacion();
+        return "ELIMINAR".equals(tipo) || "DELETE".equals(tipo)
+                || "ACTUALIZAR".equals(tipo) || "UPDATE".equals(tipo);
+    }
+
+    private void liberarLockSiAplica(Proceso procesoActual, Archivo archivoObjetivo, boolean lockAdquirido) {
+        if (!lockAdquirido || archivoObjetivo == null) {
             return;
         }
 
@@ -266,6 +383,8 @@ public class Planificador extends Thread {
                 || "ACTUALIZAR".equals(tipo) || "UPDATE".equals(tipo)) {
             archivoObjetivo.terminarEscribir();
         }
+
+        gestor.imprimirEnLogVisual("🔓 [" + procesoActual.getIdProceso() + "] Lock liberado de " + procesoActual.getNombreArchivo());
     }
 
     private int calcularMovimiento(int posicionActual, int destino) {
@@ -276,6 +395,16 @@ public class Planificador extends Thread {
         }
 
         return Math.abs(destino - posicionActual);
+    }
+
+    private int calcularTiempoServicio(Proceso procesoActual) {
+        String tipo = procesoActual.getTipoOperacion();
+
+        if ("LEER".equals(tipo) || "READ".equals(tipo)) {
+            return Math.max(700, velocidadMs);
+        }
+
+        return Math.max(900, velocidadMs + 250);
     }
 
     private boolean ejecutarOperacion(Proceso procesoActual, Archivo archivoObjetivo) {

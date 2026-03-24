@@ -798,12 +798,7 @@ public class VentanaPrincipal extends JFrame {
         for (int i = 0; i < dirActual.getArchivos().getTamano(); i++) {
             Archivo arch = dirActual.getArchivos().obtener(i);
 
-            String estadoLock = "Libre";
-            if (arch.isSiendoEscrito()) {
-                estadoLock = "🔒 Escritura";
-            } else if (arch.getLectoresActivos() > 0) {
-                estadoLock = "👁 Lectura (" + arch.getLectoresActivos() + ")";
-            }
+            String estadoLock = arch.getResumenLock();
 
             String colorHex = colorHexPorNombre(arch.getNombre());
 
