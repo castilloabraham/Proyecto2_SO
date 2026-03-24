@@ -25,6 +25,9 @@ public class GestorArchivos {
     private Planificador planificador;
     
     private interfaz.VentanaPrincipal ventana;
+    
+    public estructuras.ListaEnlazada<String> journal = new estructuras.ListaEnlazada<>();
+    public boolean simularFallo = false;
 
     public GestorArchivos() {
         this.disco = new Disco(100);
@@ -348,40 +351,99 @@ public class GestorArchivos {
     
     public String importarDeJson(String rutaArchivo) {
         try (FileReader reader = new FileReader(rutaArchivo)) {
-            // 1. Leemos el archivo y lo convertimos en un Arreglo JSON
-            JsonElement elementoRaiz = JsonParser.parseReader(reader);
-            JsonArray listaArchivosJson = elementoRaiz.getAsJsonArray();
+            JsonObject raiz = JsonParser.parseReader(reader).getAsJsonObject();
 
-            int archivosImportados = 0;
-
-            // 2. Recorremos cada archivo dentro del JSON
-            for (JsonElement elemento : listaArchivosJson) {
-                JsonObject archivoJson = elemento.getAsJsonObject();
-                
-                // Extraemos los datos (Asegúrate de que las preparadoras usen estos nombres, 
-                // o cámbialos aquí si te dan un formato específico)
-                String nombre = archivoJson.get("nombre").getAsString();
-                
-                // Por defecto le damos 1 bloque si el JSON no trae tamaño
-                int tamano = 1; 
-                if (archivoJson.has("tamano")) {
-                    tamano = archivoJson.get("tamano").getAsInt();
-                } else if (archivoJson.has("tamaño")) {
-                    tamano = archivoJson.get("tamaño").getAsInt();
-                }
-
-                // 3. Recreamos el archivo en tu simulador usando tu método
-                boolean exito = crearArchivo(nombre, tamano, "admin");
-                if (exito) {
-                    archivosImportados++;
-                }
+            // 1. Cargar la posición inicial del cabezal
+            if (raiz.has("initial_head")) {
+                this.posicionCabeza = raiz.get("initial_head").getAsInt();
+                imprimirEnLogVisual("📍 Cabezal movido a la posición: " + posicionCabeza);
             }
-            
-            return "✅ Se importaron " + archivosImportados + " archivos correctamente.";
-            
+
+            // 2. Cargar los Archivos del Sistema (Se crean directo en disco sin pasar por la cola)
+            if (raiz.has("system_files")) {
+                JsonObject sysFiles = raiz.getAsJsonObject("system_files");
+                for (String key : sysFiles.keySet()) {
+                    JsonObject fileObj = sysFiles.getAsJsonObject(key);
+                    String name = fileObj.get("name").getAsString();
+                    int blocks = fileObj.get("blocks").getAsInt();
+                    
+                    this.crearArchivo(name, blocks, "admin");
+                }
+                imprimirEnLogVisual("📂 System Files cargados correctamente.");
+            }
+
+            // 3. Encolar las solicitudes (requests) para que las atienda el Planificador
+            if (raiz.has("requests")) {
+                JsonArray requests = raiz.getAsJsonArray("requests");
+                for (JsonElement req : requests) {
+                    JsonObject reqObj = req.getAsJsonObject();
+                    String op = reqObj.get("op").getAsString().toUpperCase();
+                    
+                    // Si el JSON trae 'name', lo usamos. Si trae 'pos', lo adaptamos.
+                    int pos = reqObj.has("pos") ? reqObj.get("pos").getAsInt() : 0;
+                    String nombreArchivo = reqObj.has("name") ? reqObj.get("name").getAsString() : "Archivo_" + pos;
+
+                    if (op.equals("CREATE")) {
+                        int size = reqObj.has("size") ? reqObj.get("size").getAsInt() : 1;
+                        encolarSolicitudCreacion(nombreArchivo, size);
+                    } else if (op.equals("DELETE")) {
+                        encolarSolicitudEliminacion(nombreArchivo);
+                    } else if (op.equals("READ") || op.equals("UPDATE")) {
+                        Proceso p = new Proceso("P" + contadorProcesos++, op, nombreArchivo, pos, 0);
+                        p.setEstado("Listo");
+                        colaProcesos.encolar(p);
+                    }
+                }
+                actualizarColaVisual();
+            }
+
+            return "✅ JSON de prueba cargado e inicializado.";
+
         } catch (Exception e) {
             e.printStackTrace();
-            return "❌ Error al importar JSON: Asegúrate de que el formato sea correcto.\nDetalle: " + e.getMessage();
+            return "❌ Error al leer el JSON: Verifica la estructura.\nDetalle: " + e.getMessage();
         }
+    }
+    
+    public void recuperarSistemaDespuesDeFallo() {
+        imprimirEnLogVisual("🔄 INICIANDO RECUPERACIÓN DEL SISTEMA (JOURNALING)...");
+        
+        // 1. Revisamos la bitácora buscando operaciones PENDIENTES
+        for (int i = 0; i < journal.getTamano(); i++) {
+            String log = journal.obtener(i);
+            
+            if (log.startsWith("PENDIENTE: CREAR")) {
+                String nombreArchivo = log.replace("PENDIENTE: CREAR ", "").trim();
+                
+                // 2. Buscamos si existe la confirmación más adelante
+                boolean confirmado = false;
+                for (int j = i + 1; j < journal.getTamano(); j++) {
+                    if (journal.obtener(j).equals("CONFIRMADA: CREAR " + nombreArchivo)) {
+                        confirmado = true;
+                        break;
+                    }
+                }
+                
+                // 3. ¡Si no está confirmado, hacemos UNDO (Deshacer)!
+                if (!confirmado) {
+                    imprimirEnLogVisual("⚠️ Detectada creación incompleta de '" + nombreArchivo + "'. Aplicando UNDO...");
+                    boolean borrado = eliminarArchivo(nombreArchivo);
+                    if (borrado) {
+                        imprimirEnLogVisual("✅ UNDO Exitoso: Bloques basura liberados.");
+                    }
+                }
+            }
+        }
+        
+        // 4. Limpiamos la bandera de fallo y la bitácora para empezar de nuevo
+        this.simularFallo = false;
+        this.journal = new estructuras.ListaEnlazada<>();
+        
+        // 5. Reiniciamos el motor del disco (El planificador se había muerto por el break)
+        this.planificador = new Planificador(this);
+        this.planificador.start();
+        
+        imprimirEnLogVisual("🚀 Sistema recuperado y en línea.");
+        refrescarPantallaCompleta();
     }
 }

@@ -211,15 +211,43 @@ public class Planificador extends Thread {
                     boolean cambioEnDisco = false;
                     
                     if (procesoActual.getTipoOperacion().equals("CREAR")) {
-                        boolean exito = gestor.crearArchivo(procesoActual.getNombreArchivo(), procesoActual.getTamano(), "admin");
-                        if (exito) cambioEnDisco = true;
-                        
-                    } else if (procesoActual.getTipoOperacion().equals("ELIMINAR")) {
-                        boolean exito = gestor.eliminarArchivo(procesoActual.getNombreArchivo());
-                        if (!exito) {
-                            exito = gestor.eliminarDirectorio(procesoActual.getNombreArchivo());
+                        // 1. Registrar en Journal como PENDIENTE
+                        String transaccion = "CREAR " + procesoActual.getNombreArchivo();
+                        gestor.journal.agregar("PENDIENTE: " + transaccion);
+                        gestor.imprimirEnLogVisual("📝 Journal: PENDIENTE " + transaccion);
+
+                        // 2. Punto crítico de fallo
+                        if (gestor.simularFallo) {
+                            gestor.imprimirEnLogVisual("💥 ¡SISTEMA CAÍDO! Falla durante: " + transaccion);
+                            break; // Rompe el hilo simulando un Crash
                         }
-                        if (exito) cambioEnDisco = true;
+
+                        // 3. Ejecutar y Confirmar
+                        boolean exito = gestor.crearArchivo(procesoActual.getNombreArchivo(), procesoActual.getTamano(), "admin");
+                        if (exito) {
+                            gestor.journal.agregar("CONFIRMADA: " + transaccion);
+                            gestor.imprimirEnLogVisual("✅ Journal: CONFIRMADA " + transaccion);
+                            cambioEnDisco = true;
+                        }
+
+                    } else if (procesoActual.getTipoOperacion().equals("ELIMINAR")) {
+                        String transaccion = "ELIMINAR " + procesoActual.getNombreArchivo();
+                        gestor.journal.agregar("PENDIENTE: " + transaccion);
+                        gestor.imprimirEnLogVisual("📝 Journal: PENDIENTE " + transaccion);
+
+                        if (gestor.simularFallo) {
+                            gestor.imprimirEnLogVisual("💥 ¡SISTEMA CAÍDO! Falla durante: " + transaccion);
+                            break;
+                        }
+
+                        boolean exito = gestor.eliminarArchivo(procesoActual.getNombreArchivo());
+                        if (!exito) exito = gestor.eliminarDirectorio(procesoActual.getNombreArchivo());
+                        
+                        if (exito) {
+                            gestor.journal.agregar("CONFIRMADA: " + transaccion);
+                            gestor.imprimirEnLogVisual("✅ Journal: CONFIRMADA " + transaccion);
+                            cambioEnDisco = true;
+                        }
                     }
                     
                     procesoActual.setEstado("Terminado");

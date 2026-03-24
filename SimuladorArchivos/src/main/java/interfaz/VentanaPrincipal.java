@@ -159,6 +159,23 @@ public class VentanaPrincipal extends JFrame {
         btnImportarJson.addActionListener(e -> accionImportarJSON()); 
         panel.add(btnImportarJson);
         
+        JButton btnFallo = new JButton("Simular Fallo");
+        btnFallo.setBackground(Color.RED);
+        btnFallo.setForeground(Color.WHITE);
+        btnFallo.addActionListener(e -> {
+            gestor.simularFallo = true;
+            areaLog.append("⚠️ ERROR FORZADO ACTIVADO: El sistema colapsará en la próxima escritura.\n");
+        });
+        panel.add(btnFallo);
+        
+        JButton btnRecuperar = new JButton("Reiniciar/Recuperar");
+        btnRecuperar.setBackground(new Color(46, 204, 113)); // Verde moderno
+        btnRecuperar.setForeground(Color.BLACK);
+        btnRecuperar.addActionListener(e -> {
+            gestor.recuperarSistemaDespuesDeFallo();
+        });
+        panel.add(btnRecuperar);
+        
         return panel;
     }
 
