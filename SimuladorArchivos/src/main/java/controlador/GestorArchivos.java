@@ -11,6 +11,9 @@ import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import java.io.FileWriter;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
+import java.io.FileReader;
 
 public class GestorArchivos {
     
@@ -321,9 +324,8 @@ public class GestorArchivos {
                 archivoJson.addProperty("nombre", arch.getNombre());
                 archivoJson.addProperty("bloqueInicial", arch.getBloqueInicial());
                 
-                // NOTA: Si tu clase Archivo tiene getTamano() u otros datos, 
-                // puedes agregarlos aquí así:
-                // archivoJson.addProperty("tamano", arch.getTamano()); 
+                archivoJson.addProperty("tamano", arch.getTamañoEnBloques()); 
+                // -------------------------------------------
                 
                 listaArchivosJson.add(archivoJson);
             }
@@ -341,6 +343,45 @@ public class GestorArchivos {
         } catch (Exception e) {
             e.printStackTrace();
             return "❌ Error al guardar JSON: " + e.getMessage();
+        }
+    }
+    
+    public String importarDeJson(String rutaArchivo) {
+        try (FileReader reader = new FileReader(rutaArchivo)) {
+            // 1. Leemos el archivo y lo convertimos en un Arreglo JSON
+            JsonElement elementoRaiz = JsonParser.parseReader(reader);
+            JsonArray listaArchivosJson = elementoRaiz.getAsJsonArray();
+
+            int archivosImportados = 0;
+
+            // 2. Recorremos cada archivo dentro del JSON
+            for (JsonElement elemento : listaArchivosJson) {
+                JsonObject archivoJson = elemento.getAsJsonObject();
+                
+                // Extraemos los datos (Asegúrate de que las preparadoras usen estos nombres, 
+                // o cámbialos aquí si te dan un formato específico)
+                String nombre = archivoJson.get("nombre").getAsString();
+                
+                // Por defecto le damos 1 bloque si el JSON no trae tamaño
+                int tamano = 1; 
+                if (archivoJson.has("tamano")) {
+                    tamano = archivoJson.get("tamano").getAsInt();
+                } else if (archivoJson.has("tamaño")) {
+                    tamano = archivoJson.get("tamaño").getAsInt();
+                }
+
+                // 3. Recreamos el archivo en tu simulador usando tu método
+                boolean exito = crearArchivo(nombre, tamano, "admin");
+                if (exito) {
+                    archivosImportados++;
+                }
+            }
+            
+            return "✅ Se importaron " + archivosImportados + " archivos correctamente.";
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "❌ Error al importar JSON: Asegúrate de que el formato sea correcto.\nDetalle: " + e.getMessage();
         }
     }
 }
