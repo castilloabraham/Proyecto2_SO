@@ -10,6 +10,7 @@ public class Proceso {
     private int tamano;
     private String propietarioSolicitante;
     private boolean directorioObjetivo;
+    private String directorioPadre;
 
     public Proceso(String idProceso, String tipoOperacion, String nombreArchivo, int bloqueDestino, int tamano) {
         this.idProceso = idProceso;
@@ -21,6 +22,7 @@ public class Proceso {
         this.nombreNuevo = "";
         this.propietarioSolicitante = "admin";
         this.directorioObjetivo = false;
+        this.directorioPadre = "raiz";
     }
 
     public String getIdProceso() { return idProceso; }
@@ -48,9 +50,15 @@ public class Proceso {
         this.directorioObjetivo = directorioObjetivo;
     }
 
+    public String getDirectorioPadre() { return directorioPadre; }
+    public void setDirectorioPadre(String directorioPadre) {
+        this.directorioPadre = (directorioPadre == null || directorioPadre.isBlank()) ? "raiz" : directorioPadre;
+    }
+
     @Override
     public String toString() {
         String extra = (nombreNuevo != null && !nombreNuevo.isBlank()) ? (" -> " + nombreNuevo) : "";
-        return idProceso + " [" + tipoOperacion + " " + nombreArchivo + extra + "] - " + estado;
+        String padre = (directorioPadre != null && !directorioPadre.isBlank()) ? (" @" + directorioPadre) : "";
+        return idProceso + " [" + tipoOperacion + " " + nombreArchivo + extra + padre + "] - " + estado;
     }
 }

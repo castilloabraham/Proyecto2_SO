@@ -571,8 +571,12 @@ public class VentanaPrincipal extends JFrame {
                 return;
             }
 
-            String mensaje = gestor.encolarSolicitudCreacion(nombre.trim(), tamano);
-            JOptionPane.showMessageDialog(this, mensaje, "Solicitud Encolada", JOptionPane.INFORMATION_MESSAGE);
+            String directorioDestino = obtenerDirectorioSeleccionado();
+            String mensaje = gestor.encolarSolicitudCreacion(nombre.trim(), tamano, usuarioActual, directorioDestino);
+            JOptionPane.showMessageDialog(this,
+                    mensaje + "\nDestino: " + directorioDestino,
+                    "Solicitud Encolada",
+                    JOptionPane.INFORMATION_MESSAGE);
         } catch (NumberFormatException e) {
             JOptionPane.showMessageDialog(this,
                     "Debe ingresar un número entero válido (Ej: 5).",
@@ -607,11 +611,12 @@ public class VentanaPrincipal extends JFrame {
             return;
         }
 
-        boolean exito = gestor.crearDirectorio(nombre.trim(), usuarioActual);
+        String directorioDestino = obtenerDirectorioSeleccionado();
+        boolean exito = gestor.crearDirectorio(nombre.trim(), usuarioActual, directorioDestino);
 
         if (exito) {
             JOptionPane.showMessageDialog(this, "Directorio creado correctamente.", "Éxito", JOptionPane.INFORMATION_MESSAGE);
-            agregarMensajeLog("📁 Directorio creado: " + nombre.trim());
+            agregarMensajeLog("📁 Directorio creado: " + nombre.trim() + " @ " + directorioDestino);
             actualizarPantallaCompleta();
         } else {
             JOptionPane.showMessageDialog(this, "No se pudo crear el directorio. Puede que ya exista uno con ese nombre.", "Error", JOptionPane.ERROR_MESSAGE);
@@ -634,14 +639,13 @@ public class VentanaPrincipal extends JFrame {
             return;
         }
 
-        boolean exito = gestor.renombrarItem(nombreAntiguo.trim(), nombreNuevo.trim());
+        String mensaje = gestor.encolarSolicitudActualizacion(nombreAntiguo.trim(), nombreNuevo.trim());
 
-        if (exito) {
-            JOptionPane.showMessageDialog(this, "Renombrado con éxito a: " + nombreNuevo.trim(), "Éxito", JOptionPane.INFORMATION_MESSAGE);
-            agregarMensajeLog("✏️ Renombrado: '" + nombreAntiguo.trim() + "' -> '" + nombreNuevo.trim() + "'");
-            actualizarPantallaCompleta();
+        if (mensaje.startsWith("⏳")) {
+            JOptionPane.showMessageDialog(this, mensaje, "Solicitud Encolada", JOptionPane.INFORMATION_MESSAGE);
+            agregarMensajeLog("✏️ UPDATE encolado: '" + nombreAntiguo.trim() + "' -> '" + nombreNuevo.trim() + "'");
         } else {
-            JOptionPane.showMessageDialog(this, "No se encontró el elemento o el nombre nuevo ya existe.", "Error", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(this, mensaje, "Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 
@@ -662,6 +666,35 @@ public class VentanaPrincipal extends JFrame {
         } else {
             JOptionPane.showMessageDialog(this, "No se encontró el archivo '" + nombre.trim() + "'.", "Error", JOptionPane.ERROR_MESSAGE);
         }
+    }
+
+    private String obtenerNombreNodoSeleccionado() {
+        if (arbolDirectorios == null || arbolDirectorios.getSelectionPath() == null) {
+            return "raiz";
+        }
+
+        Object seleccionado = arbolDirectorios.getSelectionPath().getLastPathComponent();
+        if (!(seleccionado instanceof DefaultMutableTreeNode)) {
+            return "raiz";
+        }
+
+        String textoNodo = ((DefaultMutableTreeNode) seleccionado).getUserObject().toString();
+        return limpiarTextoNodo(textoNodo);
+    }
+
+    private String obtenerDirectorioSeleccionado() {
+        String nombre = obtenerNombreNodoSeleccionado();
+        Archivo arch = gestor.buscarArchivoObj(nombre);
+        if (arch != null) {
+            return gestor.nombreDirectorioDeArchivo(nombre);
+        }
+
+        Directorio dir = gestor.buscarDirectorioObj(nombre);
+        if (dir != null) {
+            return dir.getNombre();
+        }
+
+        return "raiz";
     }
 
     private void actualizarPermisos(boolean esAdmin) {
@@ -817,7 +850,7 @@ public class VentanaPrincipal extends JFrame {
                 lblDetalleTipo.setText("Tipo: Directorio");
                 lblDetalleTamano.setText("Tamaño: " + dir.getArchivos().getTamano() + " archivos / "
                         + dir.getSubdirectorios().getTamano() + " carpetas");
-                lblDetalleDueno.setText("Dueño: N/A");
+                lblDetalleDueno.setText("Dueño: " + dir.getPropietario());
                 return;
             }
         }

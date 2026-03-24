@@ -4,6 +4,7 @@ import modelo.Archivo;
 import modelo.Bloque;
 import modelo.Directorio;
 import modelo.Disco;
+import modelo.EntradaJournal;
 import modelo.Proceso;
 import estructuras.Cola;
 import estructuras.ListaEnlazada;
@@ -20,6 +21,8 @@ import java.io.FileWriter;
 
 public class GestorArchivos {
 
+    private static final int CAPACIDAD_DISCO = 250;
+
     private Disco disco;
     private Directorio directorioRaiz;
 
@@ -29,14 +32,13 @@ public class GestorArchivos {
 
     private interfaz.VentanaPrincipal ventana;
 
-    // Se mantiene como String para que compile con tu Planificador actual
-    public ListaEnlazada<String> journal = new ListaEnlazada<>();
+    public ListaEnlazada<EntradaJournal> journal = new ListaEnlazada<>();
     public boolean simularFallo = false;
 
     private int posicionCabeza = 0;
 
     public GestorArchivos() {
-        this.disco = new Disco(100);
+        this.disco = new Disco(CAPACIDAD_DISCO);
         this.directorioRaiz = new Directorio("raiz");
         this.colaProcesos = new Cola<>();
         this.planificador = new Planificador(this);
@@ -91,8 +93,14 @@ public class GestorArchivos {
             Proceso p = colaProcesos.desencolar();
 
             sb.append(" ⚙️ [").append(p.getIdProceso()).append("] ");
-            sb.append(p.getTipoOperacion()).append(" '").append(p.getNombreArchivo()).append("' ");
-            sb.append("-> Destino: Blk ").append(p.getBloqueDestino());
+            sb.append(p.getTipoOperacion()).append(" '").append(p.getNombreArchivo()).append("'");
+            if (p.getNombreNuevo() != null && !p.getNombreNuevo().isBlank()) {
+                sb.append(" -> '").append(p.getNombreNuevo()).append("'");
+            }
+            if (p.getDirectorioPadre() != null && !p.getDirectorioPadre().isBlank()) {
+                sb.append(" @ ").append(p.getDirectorioPadre());
+            }
+            sb.append(" -> Destino: Blk ").append(p.getBloqueDestino());
 
             if (p.getEstado() != null && p.getEstado().contains("Bloqueado")) {
                 sb.append(" (🔒 BLOQUEADO)\n");
@@ -126,6 +134,37 @@ public class GestorArchivos {
 
     private boolean existeNombreGlobal(String nombre) {
         return buscarArchivoObj(nombre) != null || buscarDirectorioObj(nombre) != null;
+    }
+
+    private boolean existeNombreEnDirectorio(Directorio dir, String nombre) {
+        if (dir == null || nombre == null || nombre.isBlank()) {
+            return false;
+        }
+
+        for (int i = 0; i < dir.getArchivos().getTamano(); i++) {
+            Archivo arch = dir.getArchivos().obtener(i);
+            if (arch.getNombre().equals(nombre)) {
+                return true;
+            }
+        }
+
+        for (int i = 0; i < dir.getSubdirectorios().getTamano(); i++) {
+            Directorio sub = dir.getSubdirectorios().obtener(i);
+            if (sub.getNombre().equals(nombre)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public Directorio resolverDirectorioPadre(String nombreDirPadre) {
+        if (nombreDirPadre == null || nombreDirPadre.isBlank() || "raiz".equalsIgnoreCase(nombreDirPadre.trim())) {
+            return directorioRaiz;
+        }
+
+        Directorio encontrado = buscarDirectorioObj(nombreDirPadre.trim());
+        return (encontrado != null) ? encontrado : directorioRaiz;
     }
 
     public Archivo buscarArchivoObj(String nombre) {
@@ -184,6 +223,53 @@ public class GestorArchivos {
         return null;
     }
 
+    public Directorio buscarPadreDeArchivo(String nombreArchivo) {
+        if (nombreArchivo == null || nombreArchivo.isBlank()) {
+            return null;
+        }
+        return buscarPadreArchivoRecursivo(directorioRaiz, nombreArchivo.trim());
+    }
+
+    private Directorio buscarPadreArchivoRecursivo(Directorio actual, String nombreArchivo) {
+        for (int i = 0; i < actual.getArchivos().getTamano(); i++) {
+            Archivo arch = actual.getArchivos().obtener(i);
+            if (arch.getNombre().equals(nombreArchivo)) {
+                return actual;
+            }
+        }
+
+        for (int i = 0; i < actual.getSubdirectorios().getTamano(); i++) {
+            Directorio hijo = actual.getSubdirectorios().obtener(i);
+            Directorio padre = buscarPadreArchivoRecursivo(hijo, nombreArchivo);
+            if (padre != null) {
+                return padre;
+            }
+        }
+
+        return null;
+    }
+
+    public Directorio buscarPadreDeDirectorio(String nombreDirectorio) {
+        if (nombreDirectorio == null || nombreDirectorio.isBlank() || "raiz".equalsIgnoreCase(nombreDirectorio.trim())) {
+            return null;
+        }
+        return buscarPadreDirectorioRecursivo(directorioRaiz, nombreDirectorio.trim());
+    }
+
+    private Directorio buscarPadreDirectorioRecursivo(Directorio actual, String nombreDirectorio) {
+        for (int i = 0; i < actual.getSubdirectorios().getTamano(); i++) {
+            Directorio sub = actual.getSubdirectorios().obtener(i);
+            if (sub.getNombre().equals(nombreDirectorio)) {
+                return actual;
+            }
+            Directorio padre = buscarPadreDirectorioRecursivo(sub, nombreDirectorio);
+            if (padre != null) {
+                return padre;
+            }
+        }
+        return null;
+    }
+
     public Archivo buscarArchivoPorBloqueInicial(int bloqueInicial) {
         return buscarArchivoPorBloqueInicialRec(directorioRaiz, bloqueInicial);
     }
@@ -208,18 +294,23 @@ public class GestorArchivos {
         return null;
     }
 
-    public boolean crearArchivo(String nombre, int tamaño, String propietario) {
-        if (nombre == null || nombre.isBlank() || tamaño <= 0) {
+    public boolean crearArchivo(String nombre, int tamano, String propietario) {
+        return crearArchivo(nombre, tamano, propietario, "raiz");
+    }
+
+    public boolean crearArchivo(String nombre, int tamano, String propietario, String nombreDirPadre) {
+        if (nombre == null || nombre.isBlank() || tamano <= 0) {
             return false;
         }
 
         nombre = nombre.trim();
+        Directorio directorioDestino = resolverDirectorioPadre(nombreDirPadre);
 
-        if (existeNombreGlobal(nombre)) {
+        if (existeNombreGlobal(nombre) || existeNombreEnDirectorio(directorioDestino, nombre)) {
             return false;
         }
 
-        if (disco.obtenerEspacioLibre() < tamaño) {
+        if (disco.obtenerEspacioLibre() < tamano) {
             return false;
         }
 
@@ -245,32 +336,41 @@ public class GestorArchivos {
                 bloquesAsignados++;
             }
 
-            if (bloquesAsignados == tamaño) {
+            if (bloquesAsignados == tamano) {
                 break;
             }
         }
 
-        if (primerBloque == -1 || bloquesAsignados != tamaño) {
+        if (primerBloque == -1 || bloquesAsignados != tamano) {
+            if (primerBloque != -1) {
+                liberarCadenaTemporal(primerBloque);
+            }
             return false;
         }
 
-        Archivo nuevoArchivo = new Archivo(nombre, tamaño, primerBloque, propietario);
-        directorioRaiz.agregarArchivo(nuevoArchivo);
+        Archivo nuevoArchivo = new Archivo(nombre, tamano, primerBloque, propietario);
+        directorioDestino.agregarArchivo(nuevoArchivo);
         return true;
     }
 
     public boolean crearDirectorio(String nombre, String propietario) {
+        return crearDirectorio(nombre, propietario, "raiz");
+    }
+
+    public boolean crearDirectorio(String nombre, String propietario, String nombreDirPadre) {
         if (nombre == null || nombre.isBlank()) {
             return false;
         }
 
         nombre = nombre.trim();
-        if (existeNombreGlobal(nombre)) {
+        Directorio directorioDestino = resolverDirectorioPadre(nombreDirPadre);
+
+        if (existeNombreGlobal(nombre) || existeNombreEnDirectorio(directorioDestino, nombre)) {
             return false;
         }
 
         Directorio nuevoDir = new Directorio(nombre, propietario);
-        directorioRaiz.agregarSubdirectorio(nuevoDir);
+        directorioDestino.agregarSubdirectorio(nuevoDir);
         return true;
     }
 
@@ -374,6 +474,10 @@ public class GestorArchivos {
     }
 
     private void liberarBloquesArchivo(Archivo arch) {
+        if (arch == null) {
+            return;
+        }
+
         Bloque[] bloquesReales = disco.getBloques();
         int bloqueActual = arch.getBloqueInicial();
 
@@ -384,6 +488,19 @@ public class GestorArchivos {
             bloquesReales[bloqueActual].setContenido("");
             bloquesReales[bloqueActual].setSiguienteBloque(-1);
             bloqueActual = siguienteBloque;
+        }
+    }
+
+    private void liberarCadenaTemporal(int primerBloque) {
+        Bloque[] bloquesReales = disco.getBloques();
+        int actual = primerBloque;
+        while (actual != -1) {
+            int siguiente = bloquesReales[actual].getSiguienteBloque();
+            bloquesReales[actual].setLibre(true);
+            bloquesReales[actual].setArchivoAsignado("Ninguno");
+            bloquesReales[actual].setContenido("");
+            bloquesReales[actual].setSiguienteBloque(-1);
+            actual = siguiente;
         }
     }
 
@@ -405,6 +522,7 @@ public class GestorArchivos {
 
         Proceso p = new Proceso("P" + contadorProcesos++, "LEER", nombre, arch.getBloqueInicial(), 0);
         p.setEstado("Listo");
+        p.setDirectorioPadre(nombreDirectorioDeArchivo(nombre));
         colaProcesos.encolar(p);
         actualizarColaVisual();
 
@@ -421,32 +539,80 @@ public class GestorArchivos {
 
         Proceso p = new Proceso("P" + contadorProcesos++, "LEER", nombreArchivo, arch.getBloqueInicial(), 0);
         p.setEstado("Listo");
+        p.setDirectorioPadre(nombreDirectorioDeArchivo(nombreArchivo));
         colaProcesos.encolar(p);
         actualizarColaVisual();
     }
 
     public String encolarSolicitudCreacion(String nombreArchivo, int tamano) {
-        Proceso p = new Proceso("P" + contadorProcesos++, "CREAR", nombreArchivo, 0, tamano);
+        return encolarSolicitudCreacion(nombreArchivo, tamano, "admin", "raiz");
+    }
+
+    public String encolarSolicitudCreacion(String nombreArchivo, int tamano, String propietario, String nombreDirPadre) {
+        if (nombreArchivo == null || nombreArchivo.isBlank()) {
+            return "❌ Debes indicar un nombre válido.";
+        }
+
+        Proceso p = new Proceso("P" + contadorProcesos++, "CREAR", nombreArchivo.trim(), 0, tamano);
         p.setEstado("Listo");
+        p.setPropietarioSolicitante(propietario);
+        p.setDirectorioPadre(nombreDirPadre);
         colaProcesos.encolar(p);
         actualizarColaVisual();
         return "⏳ Solicitud de CREACIÓN enviada a la cola.";
     }
 
     public String encolarSolicitudEliminacion(String nombreArchivo) {
-        int bloqueDestino = 0;
-        Archivo arch = buscarArchivoObj(nombreArchivo);
-        if (arch != null) {
-            bloqueDestino = arch.getBloqueInicial();
+        if (nombreArchivo == null || nombreArchivo.isBlank()) {
+            return "❌ Debes indicar un archivo o carpeta.";
         }
 
-        Proceso p = new Proceso("P" + contadorProcesos++, "ELIMINAR", nombreArchivo, bloqueDestino, 0);
+        int bloqueDestino = 0;
+        Archivo arch = buscarArchivoObj(nombreArchivo);
+        boolean esDirectorio = false;
+
+        if (arch != null) {
+            bloqueDestino = arch.getBloqueInicial();
+        } else if (buscarDirectorioObj(nombreArchivo) != null) {
+            esDirectorio = true;
+        } else {
+            return "❌ No existe un archivo o carpeta con ese nombre.";
+        }
+
+        Proceso p = new Proceso("P" + contadorProcesos++, "ELIMINAR", nombreArchivo.trim(), bloqueDestino, 0);
         p.setEstado("Listo");
+        p.setDirectorioObjetivo(esDirectorio);
+        p.setDirectorioPadre(esDirectorio ? nombreDirectorioPadreDeDirectorio(nombreArchivo) : nombreDirectorioDeArchivo(nombreArchivo));
         colaProcesos.encolar(p);
         actualizarColaVisual();
         return "⏳ Solicitud de ELIMINACIÓN enviada a la cola.";
     }
 
+    public String encolarSolicitudActualizacion(String nombreActual, String nombreNuevo) {
+        if (nombreActual == null || nombreActual.isBlank() || nombreNuevo == null || nombreNuevo.isBlank()) {
+            return "❌ Debes indicar ambos nombres.";
+        }
+
+        if (existeNombreGlobal(nombreNuevo.trim())) {
+            return "❌ El nombre nuevo ya existe.";
+        }
+
+        Archivo arch = buscarArchivoObj(nombreActual.trim());
+        Directorio dir = buscarDirectorioObj(nombreActual.trim());
+        if (arch == null && dir == null) {
+            return "❌ No se encontró el elemento a actualizar.";
+        }
+
+        int bloqueDestino = (arch != null) ? arch.getBloqueInicial() : 0;
+        Proceso p = new Proceso("P" + contadorProcesos++, "ACTUALIZAR", nombreActual.trim(), bloqueDestino, 0);
+        p.setEstado("Listo");
+        p.setNombreNuevo(nombreNuevo.trim());
+        p.setDirectorioObjetivo(dir != null);
+        p.setDirectorioPadre((dir != null) ? nombreDirectorioPadreDeDirectorio(nombreActual.trim()) : nombreDirectorioDeArchivo(nombreActual.trim()));
+        colaProcesos.encolar(p);
+        actualizarColaVisual();
+        return "⏳ Solicitud de ACTUALIZACIÓN enviada a la cola.";
+    }
 
     public String obtenerEstadisticas() {
         int total = disco.getCapacidad();
@@ -454,7 +620,7 @@ public class GestorArchivos {
         int ocupado = total - libre;
 
         int numArchivos = contarArchivosRec(directorioRaiz);
-        int numCarpetas = contarDirectoriosRec(directorioRaiz) - 1; // no contar raíz
+        int numCarpetas = contarDirectoriosRec(directorioRaiz) - 1;
 
         double porcentajeUso = ((double) ocupado / total) * 100;
 
@@ -484,9 +650,114 @@ public class GestorArchivos {
         return total;
     }
 
-    // =========================================================
-    // JSON
-    // =========================================================
+    public EntradaJournal registrarOperacionPendiente(String tipoOperacion, String nombreArchivo, int tamano,
+                                                      int bloqueInicial, String propietario,
+                                                      boolean directorio, String directorioPadre) {
+        EntradaJournal entrada = new EntradaJournal(
+                tipoOperacion.toUpperCase(),
+                nombreArchivo,
+                tamano,
+                bloqueInicial,
+                propietario,
+                directorio,
+                "PENDIENTE",
+                directorioPadre
+        );
+        journal.agregar(entrada);
+        imprimirEnLogVisual("📝 Journal: PENDIENTE " + tipoOperacion.toUpperCase() + " " + nombreArchivo);
+        return entrada;
+    }
+
+    public void confirmarOperacionJournal(EntradaJournal entrada) {
+        if (entrada == null) {
+            return;
+        }
+        entrada.setEstado("CONFIRMADA");
+        imprimirEnLogVisual("✅ Journal: CONFIRMADA " + entrada.getTipoOperacion() + " " + entrada.getNombreArchivo());
+    }
+
+    public void marcarUndoJournal(EntradaJournal entrada) {
+        if (entrada == null) {
+            return;
+        }
+        entrada.setEstado("UNDO");
+        imprimirEnLogVisual("↩️ Journal: UNDO " + entrada.getTipoOperacion() + " " + entrada.getNombreArchivo());
+    }
+
+    public EntradaJournal construirSnapshotParaEliminacion(String nombreItem) {
+        Archivo arch = buscarArchivoObj(nombreItem);
+        if (arch != null) {
+            return new EntradaJournal(
+                    "ELIMINAR",
+                    arch.getNombre(),
+                    arch.getTamañoEnBloques(),
+                    arch.getBloqueInicial(),
+                    arch.getPropietario(),
+                    false,
+                    "PENDIENTE",
+                    nombreDirectorioDeArchivo(nombreItem)
+            );
+        }
+
+        Directorio dir = buscarDirectorioObj(nombreItem);
+        if (dir != null && !"raiz".equalsIgnoreCase(dir.getNombre())) {
+            return new EntradaJournal(
+                    "ELIMINAR",
+                    dir.getNombre(),
+                    0,
+                    -1,
+                    dir.getPropietario(),
+                    true,
+                    "PENDIENTE",
+                    nombreDirectorioPadreDeDirectorio(nombreItem)
+            );
+        }
+
+        return null;
+    }
+
+    public boolean restaurarDesdeJournal(EntradaJournal entrada) {
+        if (entrada == null) {
+            return false;
+        }
+
+        if ("CREAR".equalsIgnoreCase(entrada.getTipoOperacion())) {
+            if (entrada.isDirectorio()) {
+                return eliminarDirectorio(entrada.getNombreArchivo());
+            }
+            return eliminarArchivo(entrada.getNombreArchivo());
+        }
+
+        if ("ELIMINAR".equalsIgnoreCase(entrada.getTipoOperacion())) {
+            if (entrada.isDirectorio()) {
+                return crearDirectorio(entrada.getNombreArchivo(), entrada.getPropietario(), entrada.getDirectorioPadre());
+            }
+            return crearArchivoForzado(
+                    entrada.getNombreArchivo(),
+                    entrada.getTamano(),
+                    entrada.getBloqueInicial(),
+                    entrada.getPropietario(),
+                    entrada.getDirectorioPadre()
+            );
+        }
+
+        return false;
+    }
+
+    public String obtenerResumenJournal() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < journal.getTamano(); i++) {
+            EntradaJournal e = journal.obtener(i);
+            sb.append(e.getEstado()).append(": ")
+                    .append(e.getTipoOperacion()).append(" ")
+                    .append(e.getNombreArchivo());
+            if (e.getDirectorioPadre() != null && !e.getDirectorioPadre().isBlank()) {
+                sb.append(" @ ").append(e.getDirectorioPadre());
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
+    }
 
     private void agregarArchivosAlJsonRecursivo(Directorio dir, JsonObject systemFiles) {
         ListaEnlazada<Archivo> archivos = dir.getArchivos();
@@ -528,7 +799,10 @@ public class GestorArchivos {
     }
 
     private void reiniciarEstadoLogico() {
-        this.disco = new Disco(100);
+        if (this.planificador != null) {
+            this.planificador.detenerPlanificador();
+        }
+        this.disco = new Disco(CAPACIDAD_DISCO);
         this.directorioRaiz = new Directorio("raiz");
         this.colaProcesos = new Cola<>();
         this.journal = new ListaEnlazada<>();
@@ -558,7 +832,7 @@ public class GestorArchivos {
                     String name = fileObj.get("name").getAsString();
                     int blocks = fileObj.get("blocks").getAsInt();
                     int bloqueInicial = Integer.parseInt(key);
-                    this.crearArchivoForzado(name, blocks, bloqueInicial, "admin");
+                    this.crearArchivoForzado(name, blocks, bloqueInicial, "admin", "raiz");
                 }
                 imprimirEnLogVisual("📂 System Files cargados correctamente.");
             }
@@ -579,7 +853,7 @@ public class GestorArchivos {
                         if (nombreArchivo == null || nombreArchivo.isBlank()) {
                             nombreArchivo = "nuevo_" + contadorProcesos + ".txt";
                         }
-                        encolarSolicitudCreacion(nombreArchivo, size);
+                        encolarSolicitudCreacion(nombreArchivo, size, "admin", "raiz");
 
                     } else if (op.equals("DELETE")) {
                         if (nombreArchivo != null) {
@@ -597,11 +871,9 @@ public class GestorArchivos {
 
                     } else if (op.equals("UPDATE")) {
                         if (nombreArchivo != null) {
-                            // El Planificador actual no ejecuta UPDATE real todavía.
-                            Proceso p = new Proceso("P" + contadorProcesos++, "UPDATE", nombreArchivo, pos, 0);
-                            p.setEstado("Listo");
-                            colaProcesos.encolar(p);
-                            imprimirEnLogVisual("⚠️ UPDATE cargado en cola para '" + nombreArchivo + "'. Requiere Planificador corregido para aplicar el cambio real.");
+                            String nombreNuevo = generarNombreActualizadoCompat(nombreArchivo);
+                            encolarSolicitudActualizacion(nombreArchivo, nombreNuevo);
+                            imprimirEnLogVisual("✏️ UPDATE cargado en cola para '" + nombreArchivo + "' -> '" + nombreNuevo + "'.");
                         } else {
                             imprimirEnLogVisual("⚠️ UPDATE ignorado: no se encontró archivo para pos=" + pos);
                         }
@@ -609,6 +881,9 @@ public class GestorArchivos {
                 }
                 actualizarColaVisual();
             }
+
+            this.planificador = new Planificador(this);
+            this.planificador.start();
 
             refrescarPantallaCompleta();
             return "✅ JSON de prueba cargado e inicializado.";
@@ -619,46 +894,40 @@ public class GestorArchivos {
         }
     }
 
-
     public void recuperarSistemaDespuesDeFallo() {
         imprimirEnLogVisual("🔄 INICIANDO RECUPERACIÓN DEL SISTEMA (JOURNALING)...");
 
         for (int i = 0; i < journal.getTamano(); i++) {
-            String log = journal.obtener(i);
+            EntradaJournal entrada = journal.obtener(i);
+            if (!"PENDIENTE".equalsIgnoreCase(entrada.getEstado())) {
+                continue;
+            }
 
-            if (log.startsWith("PENDIENTE: CREAR")) {
-                String nombreArchivo = log.replace("PENDIENTE: CREAR ", "").trim();
-
-                boolean confirmado = false;
-                for (int j = i + 1; j < journal.getTamano(); j++) {
-                    if (journal.obtener(j).equals("CONFIRMADA: CREAR " + nombreArchivo)) {
-                        confirmado = true;
-                        break;
-                    }
-                }
-
-                if (!confirmado) {
-                    imprimirEnLogVisual("⚠️ Detectada creación incompleta de '" + nombreArchivo + "'. Aplicando UNDO...");
-                    boolean borrado = eliminarArchivo(nombreArchivo);
-                    if (borrado) {
-                        imprimirEnLogVisual("✅ UNDO Exitoso: Bloques basura liberados.");
-                    }
-                }
+            imprimirEnLogVisual("⚠️ Operación pendiente detectada: " + entrada.getTipoOperacion() + " " + entrada.getNombreArchivo());
+            boolean recuperado = restaurarDesdeJournal(entrada);
+            if (recuperado) {
+                marcarUndoJournal(entrada);
+            } else {
+                imprimirEnLogVisual("❌ No se pudo aplicar UNDO para '" + entrada.getNombreArchivo() + "'.");
             }
         }
 
         this.simularFallo = false;
-        this.journal = new ListaEnlazada<>();
 
         this.planificador = new Planificador(this);
         this.planificador.start();
 
+        imprimirEnLogVisual("📘 Estado del Journal tras recuperación:\n" + obtenerResumenJournal());
         imprimirEnLogVisual("🚀 Sistema recuperado y en línea.");
         refrescarPantallaCompleta();
+        actualizarColaVisual();
     }
 
-
     public boolean crearArchivoForzado(String nombre, int tamano, int bloqueInicial, String propietario) {
+        return crearArchivoForzado(nombre, tamano, bloqueInicial, propietario, "raiz");
+    }
+
+    public boolean crearArchivoForzado(String nombre, int tamano, int bloqueInicial, String propietario, String nombreDirPadre) {
         if (nombre == null || nombre.isBlank() || tamano <= 0 || bloqueInicial < 0) {
             return false;
         }
@@ -692,8 +961,29 @@ public class GestorArchivos {
             bloqueAnterior = actual;
         }
 
+        Directorio directorioDestino = resolverDirectorioPadre(nombreDirPadre);
         Archivo nuevoArchivo = new Archivo(nombre, tamano, bloqueInicial, propietario);
-        directorioRaiz.agregarArchivo(nuevoArchivo);
+        directorioDestino.agregarArchivo(nuevoArchivo);
         return true;
+    }
+
+    public String nombreDirectorioDeArchivo(String nombreArchivo) {
+        Directorio padre = buscarPadreDeArchivo(nombreArchivo);
+        return (padre != null) ? padre.getNombre() : "raiz";
+    }
+
+    public String nombreDirectorioPadreDeDirectorio(String nombreDirectorio) {
+        Directorio padre = buscarPadreDeDirectorio(nombreDirectorio);
+        return (padre != null) ? padre.getNombre() : "raiz";
+    }
+
+    private String generarNombreActualizadoCompat(String nombreBase) {
+        int punto = nombreBase.lastIndexOf('.');
+        if (punto > 0) {
+            String base = nombreBase.substring(0, punto);
+            String ext = nombreBase.substring(punto);
+            return base + "_upd" + ext;
+        }
+        return nombreBase + "_upd";
     }
 }

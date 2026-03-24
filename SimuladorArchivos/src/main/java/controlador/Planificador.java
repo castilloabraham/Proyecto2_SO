@@ -2,6 +2,7 @@ package controlador;
 
 import estructuras.Cola;
 import modelo.Archivo;
+import modelo.EntradaJournal;
 import modelo.Proceso;
 
 public class Planificador extends Thread {
@@ -81,6 +82,7 @@ public class Planificador extends Thread {
 
                 String mensaje = "✅ [" + politicaActual + "] Atendió: " + procesoActual.getIdProceso()
                         + " | " + procesoActual.getTipoOperacion() + " " + procesoActual.getNombreArchivo()
+                        + ((procesoActual.getNombreNuevo() != null && !procesoActual.getNombreNuevo().isBlank()) ? (" -> " + procesoActual.getNombreNuevo()) : "")
                         + " | Viajó " + movimiento + " bloques.";
 
                 gestor.imprimirEnLogVisual(mensaje);
@@ -267,9 +269,12 @@ public class Planificador extends Thread {
     }
 
     private int calcularMovimiento(int posicionActual, int destino) {
+        int ultimoBloque = gestor.getDisco().getCapacidad() - 1;
+
         if ("C-SCAN".equals(politicaActual) && destino < posicionActual) {
-            return (99 - posicionActual) + destino;
+            return (ultimoBloque - posicionActual) + destino;
         }
+
         return Math.abs(destino - posicionActual);
     }
 
@@ -282,31 +287,51 @@ public class Planificador extends Thread {
         }
 
         if ("CREAR".equals(tipo) || "CREATE".equals(tipo)) {
-            String transaccion = "CREAR " + procesoActual.getNombreArchivo();
-            gestor.journal.agregar("PENDIENTE: " + transaccion);
-            gestor.imprimirEnLogVisual("📝 Journal: PENDIENTE " + transaccion);
+            EntradaJournal entrada = gestor.registrarOperacionPendiente(
+                    "CREAR",
+                    procesoActual.getNombreArchivo(),
+                    procesoActual.getTamano(),
+                    -1,
+                    procesoActual.getPropietarioSolicitante(),
+                    false,
+                    procesoActual.getDirectorioPadre()
+            );
 
-            boolean exito = gestor.crearArchivo(procesoActual.getNombreArchivo(), procesoActual.getTamano(), "admin");
+            boolean exito = gestor.crearArchivo(
+                    procesoActual.getNombreArchivo(),
+                    procesoActual.getTamano(),
+                    procesoActual.getPropietarioSolicitante(),
+                    procesoActual.getDirectorioPadre()
+            );
             if (!exito) {
                 gestor.imprimirEnLogVisual("❌ No se pudo crear '" + procesoActual.getNombreArchivo() + "'.");
                 return false;
             }
 
+            Archivo creado = gestor.buscarArchivoObj(procesoActual.getNombreArchivo());
+            if (creado != null) {
+                entrada.setBloqueInicial(creado.getBloqueInicial());
+                procesoActual.setBloqueDestino(creado.getBloqueInicial());
+            }
+
             if (gestor.simularFallo) {
-                gestor.imprimirEnLogVisual("💥 ¡SISTEMA CAÍDO! Falla después de crear y antes del commit: " + transaccion);
+                gestor.imprimirEnLogVisual("💥 ¡SISTEMA CAÍDO! Falla después de crear y antes del commit: CREAR " + procesoActual.getNombreArchivo());
                 ejecutando = false;
                 return true;
             }
 
-            gestor.journal.agregar("CONFIRMADA: " + transaccion);
-            gestor.imprimirEnLogVisual("✅ Journal: CONFIRMADA " + transaccion);
+            gestor.confirmarOperacionJournal(entrada);
             return true;
         }
 
         if ("ELIMINAR".equals(tipo) || "DELETE".equals(tipo)) {
-            String transaccion = "ELIMINAR " + procesoActual.getNombreArchivo();
-            gestor.journal.agregar("PENDIENTE: " + transaccion);
-            gestor.imprimirEnLogVisual("📝 Journal: PENDIENTE " + transaccion);
+            EntradaJournal entrada = gestor.construirSnapshotParaEliminacion(procesoActual.getNombreArchivo());
+            if (entrada == null) {
+                gestor.imprimirEnLogVisual("❌ No se pudo preparar journal para eliminar '" + procesoActual.getNombreArchivo() + "'.");
+                return false;
+            }
+            gestor.journal.agregar(entrada);
+            gestor.imprimirEnLogVisual("📝 Journal: PENDIENTE ELIMINAR " + procesoActual.getNombreArchivo());
 
             boolean exito = gestor.eliminarArchivo(procesoActual.getNombreArchivo());
             if (!exito) {
@@ -318,13 +343,15 @@ public class Planificador extends Thread {
                 return false;
             }
 
-            gestor.journal.agregar("CONFIRMADA: " + transaccion);
-            gestor.imprimirEnLogVisual("✅ Journal: CONFIRMADA " + transaccion);
+            gestor.confirmarOperacionJournal(entrada);
             return true;
         }
 
         if ("ACTUALIZAR".equals(tipo) || "UPDATE".equals(tipo)) {
-            String nombreNuevo = generarNombreActualizado(procesoActual.getNombreArchivo());
+            String nombreNuevo = (procesoActual.getNombreNuevo() != null && !procesoActual.getNombreNuevo().isBlank())
+                    ? procesoActual.getNombreNuevo()
+                    : generarNombreActualizado(procesoActual.getNombreArchivo());
+
             boolean exito = gestor.renombrarItem(procesoActual.getNombreArchivo(), nombreNuevo);
 
             if (exito) {
