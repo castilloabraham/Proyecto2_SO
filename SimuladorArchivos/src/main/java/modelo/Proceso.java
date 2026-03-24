@@ -2,34 +2,55 @@ package modelo;
 
 public class Proceso {
     private String idProceso;
-    private String estado; 
-    private String tipoOperacion; 
+    private String estado;
+    private String tipoOperacion;
     private String nombreArchivo;
+    private String nombreNuevo;
     private int bloqueDestino;
-    private int tamano; 
+    private int tamano;
+    private String propietarioSolicitante;
+    private boolean directorioObjetivo;
 
-    // Constructor actualizado
     public Proceso(String idProceso, String tipoOperacion, String nombreArchivo, int bloqueDestino, int tamano) {
         this.idProceso = idProceso;
         this.tipoOperacion = tipoOperacion;
         this.nombreArchivo = nombreArchivo;
         this.bloqueDestino = bloqueDestino;
         this.tamano = tamano;
-        this.estado = "Nuevo"; 
+        this.estado = "Nuevo";
+        this.nombreNuevo = "";
+        this.propietarioSolicitante = "admin";
+        this.directorioObjetivo = false;
     }
 
-    // --- Getters y Setters ---
     public String getIdProceso() { return idProceso; }
     public String getEstado() { return estado; }
     public void setEstado(String estado) { this.estado = estado; }
+
     public String getTipoOperacion() { return tipoOperacion; }
     public String getNombreArchivo() { return nombreArchivo; }
+
+    public String getNombreNuevo() { return nombreNuevo; }
+    public void setNombreNuevo(String nombreNuevo) { this.nombreNuevo = nombreNuevo; }
+
     public int getBloqueDestino() { return bloqueDestino; }
-    
-    public int getTamano() { return tamano; } // <-- NUEVO GETTER
+    public void setBloqueDestino(int bloqueDestino) { this.bloqueDestino = bloqueDestino; }
+
+    public int getTamano() { return tamano; }
+
+    public String getPropietarioSolicitante() { return propietarioSolicitante; }
+    public void setPropietarioSolicitante(String propietarioSolicitante) {
+        this.propietarioSolicitante = propietarioSolicitante;
+    }
+
+    public boolean isDirectorioObjetivo() { return directorioObjetivo; }
+    public void setDirectorioObjetivo(boolean directorioObjetivo) {
+        this.directorioObjetivo = directorioObjetivo;
+    }
 
     @Override
     public String toString() {
-        return idProceso + " [" + tipoOperacion + " " + nombreArchivo + "] - " + estado;
+        String extra = (nombreNuevo != null && !nombreNuevo.isBlank()) ? (" -> " + nombreNuevo) : "";
+        return idProceso + " [" + tipoOperacion + " " + nombreArchivo + extra + "] - " + estado;
     }
 }

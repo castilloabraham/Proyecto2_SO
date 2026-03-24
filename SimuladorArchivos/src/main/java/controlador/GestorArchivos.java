@@ -4,41 +4,71 @@ import modelo.Archivo;
 import modelo.Bloque;
 import modelo.Directorio;
 import modelo.Disco;
-import estructuras.Cola;
 import modelo.Proceso;
+import estructuras.Cola;
+import estructuras.ListaEnlazada;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
-import com.google.gson.JsonObject;
-import java.io.FileWriter;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+
 import java.io.FileReader;
+import java.io.FileWriter;
 
 public class GestorArchivos {
-    
+
     private Disco disco;
     private Directorio directorioRaiz;
-    
-    private Cola<Proceso> colaProcesos; 
+
+    private Cola<Proceso> colaProcesos;
     private int contadorProcesos = 1;
     private Planificador planificador;
-    
+
     private interfaz.VentanaPrincipal ventana;
-    
-    public estructuras.ListaEnlazada<String> journal = new estructuras.ListaEnlazada<>();
+
+    // Se mantiene como String para que compile con tu Planificador actual
+    public ListaEnlazada<String> journal = new ListaEnlazada<>();
     public boolean simularFallo = false;
+
+    private int posicionCabeza = 0;
 
     public GestorArchivos() {
         this.disco = new Disco(100);
         this.directorioRaiz = new Directorio("raiz");
         this.colaProcesos = new Cola<>();
         this.planificador = new Planificador(this);
-        this.planificador.start(); // ¡Esto enciende el motor en segundo plano!
+        this.planificador.start();
     }
-    
+
     public void setVentana(interfaz.VentanaPrincipal ventana) {
         this.ventana = ventana;
+    }
+
+    public interfaz.VentanaPrincipal getVentana() {
+        return this.ventana;
+    }
+
+    public Cola<Proceso> getColaProcesos() {
+        return colaProcesos;
+    }
+
+    public Disco getDisco() {
+        return disco;
+    }
+
+    public Directorio getDirectorioRaiz() {
+        return directorioRaiz;
+    }
+
+    public int getPosicionCabeza() {
+        return posicionCabeza;
+    }
+
+    public void setPosicionCabeza(int posicion) {
+        this.posicionCabeza = posicion;
     }
 
     public void imprimirEnLogVisual(String mensaje) {
@@ -48,214 +78,38 @@ public class GestorArchivos {
     }
 
     public void actualizarColaVisual() {
+        if (this.ventana == null) {
+            return;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("=== COLA DE PROCESOS (I/O) ===\n");
+        sb.append("Total esperando: ").append(colaProcesos.getTamano()).append("\n\n");
+
+        int size = colaProcesos.getTamano();
+        for (int i = 0; i < size; i++) {
+            Proceso p = colaProcesos.desencolar();
+
+            sb.append(" ⚙️ [").append(p.getIdProceso()).append("] ");
+            sb.append(p.getTipoOperacion()).append(" '").append(p.getNombreArchivo()).append("' ");
+            sb.append("-> Destino: Blk ").append(p.getBloqueDestino());
+
+            if (p.getEstado() != null && p.getEstado().contains("Bloqueado")) {
+                sb.append(" (🔒 BLOQUEADO)\n");
+            } else {
+                sb.append(" (⏳ ").append(p.getEstado()).append(")\n");
+            }
+
+            colaProcesos.encolar(p);
+        }
+
+        this.ventana.actualizarPantallaProcesos(sb.toString());
+    }
+
+    public void refrescarPantallaCompleta() {
         if (this.ventana != null) {
-            StringBuilder sb = new StringBuilder();
-            sb.append("=== COLA DE PROCESOS (I/O) ===\n");
-            sb.append("Esperando para usar el disco: ").append(colaProcesos.getTamano()).append(" procesos.\n");
-            this.ventana.actualizarPantallaProcesos(sb.toString());
+            this.ventana.actualizarPantallaCompleta();
         }
-    }
-    
-    public Cola<Proceso> getColaProcesos() { return colaProcesos; }
-    public Disco getDisco() { return disco; }
-    public Directorio getDirectorioRaiz() { return directorioRaiz; }
-    private int posicionCabeza = 0; // La aguja siempre empieza en el bloque 0
-
-    // Getter y setter para la aguja del disco:
-    public int getPosicionCabeza() { return posicionCabeza; }
-    public void setPosicionCabeza(int posicion) { this.posicionCabeza = posicion; }
-    
-    public void encolarSolicitudLectura(String nombreArchivo) {
-        // Para leer, el tamaño no importa, le pasamos 0
-        Proceso p = new Proceso("P" + contadorProcesos++, "LEER", nombreArchivo, 0, 0);
-        p.setEstado("Listo");
-        colaProcesos.encolar(p);
-    }
-
-    // Retorna true si se pudo crear, false si no hay espacio
-    public boolean crearArchivo(String nombre, int tamaño, String propietario) {
-        // 1. Verificar si hay espacio suficiente
-        if (disco.obtenerEspacioLibre() < tamaño) {
-            return false; 
-        }
-
-        // 2. Buscar bloques libres y ocuparlos (CON ASIGNACIÓN ENCADENADA)
-        int bloquesAsignados = 0;
-        int primerBloque = -1;
-        int bloqueAnterior = -1; 
-        Bloque[] bloquesReales = disco.getBloques();
-
-        for (int i = 0; i < disco.getCapacidad(); i++) {
-            if (bloquesReales[i].isLibre()) {
-                
-                if (bloquesAsignados == 0) {
-                    primerBloque = i; // Guardamos dónde empieza el archivo
-                } else {
-                    // Le decimos al bloque anterior que apunte a este nuevo bloque
-                    bloquesReales[bloqueAnterior].setSiguienteBloque(i);
-                }
-                
-                bloquesReales[i].setLibre(false); // Lo marcamos como ocupado
-                bloquesReales[i].setArchivoAsignado(nombre); // Le damos el nombre para el tooltip
-                bloquesReales[i].setContenido("Datos de: " + nombre); 
-                bloquesReales[i].setSiguienteBloque(-1); // Por defecto apunta a -1 (Fin de archivo)
-                
-                bloqueAnterior = i; // Actualizamos el bloque anterior para la próxima iteración
-                bloquesAsignados++;
-            }
-            
-            // Si ya encontramos todo el espacio necesario, nos salimos del ciclo
-            if (bloquesAsignados == tamaño) {
-                break; 
-            }
-        }
-
-        // 3. Crear el archivo lógicamente y meterlo en la carpeta raíz
-        Archivo nuevoArchivo = new Archivo(nombre, tamaño, primerBloque, propietario);
-        directorioRaiz.agregarArchivo(nuevoArchivo);
-
-        return true; // Éxito
-    }
-    
-    // --- NUEVO HELPER: Libera los bloques del disco de cualquier archivo ---
-    private void liberarBloquesArchivo(modelo.Archivo arch) {
-        Bloque[] bloquesReales = disco.getBloques();
-        int bloqueActual = arch.getBloqueInicial();
-        
-        while (bloqueActual != -1) {
-            int siguienteBloque = bloquesReales[bloqueActual].getSiguienteBloque();
-            bloquesReales[bloqueActual].setLibre(true);
-            bloquesReales[bloqueActual].setArchivoAsignado("Ninguno"); 
-            bloquesReales[bloqueActual].setContenido("");
-            bloquesReales[bloqueActual].setSiguienteBloque(-1);
-            bloqueActual = siguienteBloque;
-        }
-    }
-
-    // --- MODIFICADO: Eliminar archivo usando el Helper ---
-    public boolean eliminarArchivo(String nombre) {
-        estructuras.ListaEnlazada<modelo.Archivo> archivos = directorioRaiz.getArchivos();
-        
-        for (int i = 0; i < archivos.getTamano(); i++) {
-            modelo.Archivo arch = archivos.obtener(i);
-            
-            if (arch.getNombre().equals(nombre)) {
-                liberarBloquesArchivo(arch); // Limpiamos el disco físicamente
-                archivos.eliminar(i); // Lo borramos lógicamente de la carpeta
-                return true; // Éxito
-            }
-        }
-        return false; // No se encontró el archivo
-    }
-
-    // --- NUEVO: Eliminar Directorio (Encuentra la carpeta) ---
-    public boolean eliminarDirectorio(String nombreDir) {
-        estructuras.ListaEnlazada<modelo.Directorio> subdirs = directorioRaiz.getSubdirectorios();
-        
-        for (int i = 0; i < subdirs.getTamano(); i++) {
-            modelo.Directorio dir = subdirs.obtener(i);
-            if (dir.getNombre().equals(nombreDir)) {
-                eliminarContenidoDirectorio(dir); // <--- Llama a la recursividad
-                subdirs.eliminar(i); // Finalmente borra la carpeta contenedora
-                return true;
-            }
-        }
-        return false;
-    }
-
-    // --- NUEVO: La magia recursiva (El que hace el trabajo sucio en cascada) ---
-    private void eliminarContenidoDirectorio(modelo.Directorio dir) {
-        // 1. Borrar todos los archivos de esta carpeta y liberar sus bloques
-        estructuras.ListaEnlazada<modelo.Archivo> archivos = dir.getArchivos();
-        while (!archivos.estaVacia()) {
-            modelo.Archivo arch = archivos.obtener(0);
-            liberarBloquesArchivo(arch); // Limpia el disco
-            archivos.eliminar(0); // Lo quita de la lista
-        }
-
-        // 2. Entrar a las subcarpetas y hacer lo mismo recursivamente
-        estructuras.ListaEnlazada<modelo.Directorio> subdirs = dir.getSubdirectorios();
-        while (!subdirs.estaVacia()) {
-            modelo.Directorio subDir = subdirs.obtener(0);
-            eliminarContenidoDirectorio(subDir); // RECURSIVIDAD: Se llama a sí mismo
-            subdirs.eliminar(0);
-        }
-    }
-    
-    public boolean crearDirectorio(String nombre) {
-        // Por ahora, crearemos las carpetas directamente dentro de "raiz"
-        Directorio nuevoDir = new Directorio(nombre);
-        directorioRaiz.agregarSubdirectorio(nuevoDir);
-        return true;
-    }
-    
-    public boolean renombrarItem(String nombreAntiguo, String nombreNuevo) {
-        // 1. Primero buscamos si es un archivo
-        estructuras.ListaEnlazada<modelo.Archivo> archivos = directorioRaiz.getArchivos();
-        for (int i = 0; i < archivos.getTamano(); i++) {
-            if (archivos.obtener(i).getNombre().equals(nombreAntiguo)) {
-                archivos.obtener(i).setNombre(nombreNuevo);
-                return true; // Éxito
-            }
-        }
-        
-        // 2. Si no era un archivo, buscamos si es una carpeta (directorio)
-        estructuras.ListaEnlazada<modelo.Directorio> subdirs = directorioRaiz.getSubdirectorios();
-        for (int i = 0; i < subdirs.getTamano(); i++) {
-            if (subdirs.obtener(i).getNombre().equals(nombreAntiguo)) {
-                subdirs.obtener(i).setNombre(nombreNuevo);
-                return true; // Éxito
-            }
-        }
-        
-        return false; // No se encontró ni archivo ni carpeta con ese nombre
-    }
-    
-    public String obtenerEstadisticas() {
-        int total = disco.getCapacidad();
-        int libre = disco.obtenerEspacioLibre();
-        int ocupado = total - libre;
-        
-        // Contamos lo que hay en la raíz
-        int numArchivos = directorioRaiz.getArchivos().getTamano();
-        int numCarpetas = directorioRaiz.getSubdirectorios().getTamano();
-
-        // Calculamos el porcentaje de uso
-        double porcentajeUso = ((double) ocupado / total) * 100;
-
-        // Armamos un texto bonito para mostrar
-        return "📊 ESTADÍSTICAS DEL DISCO 📊\n\n" +
-               "🔹 Capacidad Total: " + total + " bloques\n" +
-               "🔴 Espacio Ocupado: " + ocupado + " bloques (" + String.format("%.1f", porcentajeUso) + "%)\n" +
-               "🟢 Espacio Libre: " + libre + " bloques\n" +
-               "📄 Total de Archivos: " + numArchivos + "\n" +
-               "📁 Total de Carpetas: " + numCarpetas;
-    }
-    
-    public String leerArchivo(String nombre) {
-        estructuras.ListaEnlazada<modelo.Archivo> archivos = directorioRaiz.getArchivos();
-        
-        for (int i = 0; i < archivos.getTamano(); i++) {
-            modelo.Archivo arch = archivos.obtener(i);
-            
-            if (arch.getNombre().equals(nombre)) {
-                int bloqueDestino = arch.getBloqueInicial();
-                
-                // 1. Creamos un proceso simulando la solicitud de I/O
-                modelo.Proceso p = new modelo.Proceso("P" + contadorProcesos++, "LEER", nombre, bloqueDestino, 0);
-                p.setEstado("Listo"); // Estado inicial antes de entrar al disco
-                
-                // 2. Lo metemos en la cola de procesos para que el Planificador lo atienda
-                colaProcesos.encolar(p);
-                actualizarColaVisual();
-                
-                // 3. Devolvemos un mensaje indicando que la solicitud está en espera
-                return "⏳ Solicitud enviada a la cola de I/O.\n" +
-                       "El disco se moverá pronto hacia el bloque " + bloqueDestino + ".\n" +
-                       "Revisa el Log de Procesos.";
-            }
-        }
-        return null; // Retorna null si no encontró el archivo
     }
 
     public void cambiarVelocidadDisco(int nuevaVelocidad) {
@@ -269,20 +123,309 @@ public class GestorArchivos {
             this.planificador.setPolitica(nuevaPolitica);
         }
     }
-    
-    public modelo.Archivo buscarArchivoObj(String nombre) {
-        estructuras.ListaEnlazada<modelo.Archivo> archivos = directorioRaiz.getArchivos();
+
+    private boolean existeNombreGlobal(String nombre) {
+        return buscarArchivoObj(nombre) != null || buscarDirectorioObj(nombre) != null;
+    }
+
+    public Archivo buscarArchivoObj(String nombre) {
+        if (nombre == null || nombre.isBlank()) {
+            return null;
+        }
+        return buscarArchivoRecursivo(directorioRaiz, nombre.trim());
+    }
+
+    private Archivo buscarArchivoRecursivo(Directorio actual, String nombre) {
+        ListaEnlazada<Archivo> archivos = actual.getArchivos();
         for (int i = 0; i < archivos.getTamano(); i++) {
-            if (archivos.obtener(i).getNombre().equals(nombre)) {
-                return archivos.obtener(i);
+            Archivo arch = archivos.obtener(i);
+            if (arch.getNombre().equals(nombre)) {
+                return arch;
             }
         }
-        return null; // Si no lo encuentra o si está en una subcarpeta (versión simplificada)
+
+        ListaEnlazada<Directorio> subdirs = actual.getSubdirectorios();
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            Archivo encontrado = buscarArchivoRecursivo(subdirs.obtener(i), nombre);
+            if (encontrado != null) {
+                return encontrado;
+            }
+        }
+
+        return null;
     }
-    
-    // --- NUEVO: Encolar creación ---
+
+    public Directorio buscarDirectorioObj(String nombre) {
+        if (nombre == null || nombre.isBlank()) {
+            return null;
+        }
+
+        if (directorioRaiz.getNombre().equals(nombre.trim())) {
+            return directorioRaiz;
+        }
+
+        return buscarDirectorioRecursivo(directorioRaiz, nombre.trim());
+    }
+
+    private Directorio buscarDirectorioRecursivo(Directorio actual, String nombre) {
+        ListaEnlazada<Directorio> subdirs = actual.getSubdirectorios();
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            Directorio dir = subdirs.obtener(i);
+            if (dir.getNombre().equals(nombre)) {
+                return dir;
+            }
+
+            Directorio encontrado = buscarDirectorioRecursivo(dir, nombre);
+            if (encontrado != null) {
+                return encontrado;
+            }
+        }
+
+        return null;
+    }
+
+    public Archivo buscarArchivoPorBloqueInicial(int bloqueInicial) {
+        return buscarArchivoPorBloqueInicialRec(directorioRaiz, bloqueInicial);
+    }
+
+    private Archivo buscarArchivoPorBloqueInicialRec(Directorio actual, int bloqueInicial) {
+        ListaEnlazada<Archivo> archivos = actual.getArchivos();
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            Archivo arch = archivos.obtener(i);
+            if (arch.getBloqueInicial() == bloqueInicial) {
+                return arch;
+            }
+        }
+
+        ListaEnlazada<Directorio> subdirs = actual.getSubdirectorios();
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            Archivo encontrado = buscarArchivoPorBloqueInicialRec(subdirs.obtener(i), bloqueInicial);
+            if (encontrado != null) {
+                return encontrado;
+            }
+        }
+
+        return null;
+    }
+
+    public boolean crearArchivo(String nombre, int tamaño, String propietario) {
+        if (nombre == null || nombre.isBlank() || tamaño <= 0) {
+            return false;
+        }
+
+        nombre = nombre.trim();
+
+        if (existeNombreGlobal(nombre)) {
+            return false;
+        }
+
+        if (disco.obtenerEspacioLibre() < tamaño) {
+            return false;
+        }
+
+        int bloquesAsignados = 0;
+        int primerBloque = -1;
+        int bloqueAnterior = -1;
+        Bloque[] bloquesReales = disco.getBloques();
+
+        for (int i = 0; i < disco.getCapacidad(); i++) {
+            if (bloquesReales[i].isLibre()) {
+                if (bloquesAsignados == 0) {
+                    primerBloque = i;
+                } else {
+                    bloquesReales[bloqueAnterior].setSiguienteBloque(i);
+                }
+
+                bloquesReales[i].setLibre(false);
+                bloquesReales[i].setArchivoAsignado(nombre);
+                bloquesReales[i].setContenido("Datos de: " + nombre);
+                bloquesReales[i].setSiguienteBloque(-1);
+
+                bloqueAnterior = i;
+                bloquesAsignados++;
+            }
+
+            if (bloquesAsignados == tamaño) {
+                break;
+            }
+        }
+
+        if (primerBloque == -1 || bloquesAsignados != tamaño) {
+            return false;
+        }
+
+        Archivo nuevoArchivo = new Archivo(nombre, tamaño, primerBloque, propietario);
+        directorioRaiz.agregarArchivo(nuevoArchivo);
+        return true;
+    }
+
+    public boolean crearDirectorio(String nombre, String propietario) {
+        if (nombre == null || nombre.isBlank()) {
+            return false;
+        }
+
+        nombre = nombre.trim();
+        if (existeNombreGlobal(nombre)) {
+            return false;
+        }
+
+        Directorio nuevoDir = new Directorio(nombre);
+        directorioRaiz.agregarSubdirectorio(nuevoDir);
+        return true;
+    }
+
+    public boolean renombrarItem(String nombreAntiguo, String nombreNuevo) {
+        if (nombreAntiguo == null || nombreAntiguo.isBlank() || nombreNuevo == null || nombreNuevo.isBlank()) {
+            return false;
+        }
+
+        nombreAntiguo = nombreAntiguo.trim();
+        nombreNuevo = nombreNuevo.trim();
+
+        if (existeNombreGlobal(nombreNuevo)) {
+            return false;
+        }
+
+        Archivo arch = buscarArchivoObj(nombreAntiguo);
+        if (arch != null) {
+            actualizarNombreEnBloques(nombreAntiguo, nombreNuevo);
+            arch.setNombre(nombreNuevo);
+            return true;
+        }
+
+        Directorio dir = buscarDirectorioObj(nombreAntiguo);
+        if (dir != null && !"raiz".equalsIgnoreCase(nombreAntiguo)) {
+            dir.setNombre(nombreNuevo);
+            return true;
+        }
+
+        return false;
+    }
+
+    public boolean eliminarArchivo(String nombre) {
+        if (nombre == null || nombre.isBlank()) {
+            return false;
+        }
+        return eliminarArchivoRecursivo(directorioRaiz, nombre.trim());
+    }
+
+    private boolean eliminarArchivoRecursivo(Directorio dir, String nombre) {
+        ListaEnlazada<Archivo> archivos = dir.getArchivos();
+
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            Archivo arch = archivos.obtener(i);
+            if (arch.getNombre().equals(nombre)) {
+                liberarBloquesArchivo(arch);
+                archivos.eliminar(i);
+                return true;
+            }
+        }
+
+        ListaEnlazada<Directorio> subdirs = dir.getSubdirectorios();
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            if (eliminarArchivoRecursivo(subdirs.obtener(i), nombre)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public boolean eliminarDirectorio(String nombreDir) {
+        if (nombreDir == null || nombreDir.isBlank() || "raiz".equalsIgnoreCase(nombreDir)) {
+            return false;
+        }
+        return eliminarDirectorioRecursivo(directorioRaiz, nombreDir.trim());
+    }
+
+    private boolean eliminarDirectorioRecursivo(Directorio padre, String nombreDir) {
+        ListaEnlazada<Directorio> subdirs = padre.getSubdirectorios();
+
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            Directorio dir = subdirs.obtener(i);
+            if (dir.getNombre().equals(nombreDir)) {
+                eliminarContenidoDirectorio(dir);
+                subdirs.eliminar(i);
+                return true;
+            }
+
+            if (eliminarDirectorioRecursivo(dir, nombreDir)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private void eliminarContenidoDirectorio(Directorio dir) {
+        ListaEnlazada<Archivo> archivos = dir.getArchivos();
+        while (!archivos.estaVacia()) {
+            Archivo arch = archivos.obtener(0);
+            liberarBloquesArchivo(arch);
+            archivos.eliminar(0);
+        }
+
+        ListaEnlazada<Directorio> subdirs = dir.getSubdirectorios();
+        while (!subdirs.estaVacia()) {
+            Directorio subDir = subdirs.obtener(0);
+            eliminarContenidoDirectorio(subDir);
+            subdirs.eliminar(0);
+        }
+    }
+
+    private void liberarBloquesArchivo(Archivo arch) {
+        Bloque[] bloquesReales = disco.getBloques();
+        int bloqueActual = arch.getBloqueInicial();
+
+        while (bloqueActual != -1) {
+            int siguienteBloque = bloquesReales[bloqueActual].getSiguienteBloque();
+            bloquesReales[bloqueActual].setLibre(true);
+            bloquesReales[bloqueActual].setArchivoAsignado("Ninguno");
+            bloquesReales[bloqueActual].setContenido("");
+            bloquesReales[bloqueActual].setSiguienteBloque(-1);
+            bloqueActual = siguienteBloque;
+        }
+    }
+
+    private void actualizarNombreEnBloques(String nombreViejo, String nombreNuevo) {
+        Bloque[] bloques = disco.getBloques();
+        for (int i = 0; i < bloques.length; i++) {
+            if (!bloques[i].isLibre() && nombreViejo.equals(bloques[i].getArchivoAsignado())) {
+                bloques[i].setArchivoAsignado(nombreNuevo);
+                bloques[i].setContenido("Datos de: " + nombreNuevo);
+            }
+        }
+    }
+
+    public String leerArchivo(String nombre) {
+        Archivo arch = buscarArchivoObj(nombre);
+        if (arch == null) {
+            return null;
+        }
+
+        Proceso p = new Proceso("P" + contadorProcesos++, "LEER", nombre, arch.getBloqueInicial(), 0);
+        p.setEstado("Listo");
+        colaProcesos.encolar(p);
+        actualizarColaVisual();
+
+        return "⏳ Solicitud enviada a la cola de I/O.\n"
+                + "El disco se moverá pronto hacia el bloque " + arch.getBloqueInicial() + ".\n"
+                + "Revisa el Log de Procesos.";
+    }
+
+    public void encolarSolicitudLectura(String nombreArchivo) {
+        Archivo arch = buscarArchivoObj(nombreArchivo);
+        if (arch == null) {
+            return;
+        }
+
+        Proceso p = new Proceso("P" + contadorProcesos++, "LEER", nombreArchivo, arch.getBloqueInicial(), 0);
+        p.setEstado("Listo");
+        colaProcesos.encolar(p);
+        actualizarColaVisual();
+    }
+
     public String encolarSolicitudCreacion(String nombreArchivo, int tamano) {
-        // El bloque destino inicial será el 0 (Directorio raíz) para buscar espacio
         Proceso p = new Proceso("P" + contadorProcesos++, "CREAR", nombreArchivo, 0, tamano);
         p.setEstado("Listo");
         colaProcesos.encolar(p);
@@ -290,15 +433,13 @@ public class GestorArchivos {
         return "⏳ Solicitud de CREACIÓN enviada a la cola.";
     }
 
-    // --- NUEVO: Encolar eliminación ---
     public String encolarSolicitudEliminacion(String nombreArchivo) {
-        // Buscar el bloque destino (donde empieza)
         int bloqueDestino = 0;
-        modelo.Archivo arch = buscarArchivoObj(nombreArchivo);
+        Archivo arch = buscarArchivoObj(nombreArchivo);
         if (arch != null) {
             bloqueDestino = arch.getBloqueInicial();
         }
-        
+
         Proceso p = new Proceso("P" + contadorProcesos++, "ELIMINAR", nombreArchivo, bloqueDestino, 0);
         p.setEstado("Listo");
         colaProcesos.encolar(p);
@@ -306,97 +447,170 @@ public class GestorArchivos {
         return "⏳ Solicitud de ELIMINACIÓN enviada a la cola.";
     }
 
-    public void refrescarPantallaCompleta() {
-        if (this.ventana != null) {
-            this.ventana.actualizarPantallaCompleta();
+
+    public String obtenerEstadisticas() {
+        int total = disco.getCapacidad();
+        int libre = disco.obtenerEspacioLibre();
+        int ocupado = total - libre;
+
+        int numArchivos = contarArchivosRec(directorioRaiz);
+        int numCarpetas = contarDirectoriosRec(directorioRaiz) - 1; // no contar raíz
+
+        double porcentajeUso = ((double) ocupado / total) * 100;
+
+        return "📊 ESTADÍSTICAS DEL DISCO 📊\n\n"
+                + "🔹 Capacidad Total: " + total + " bloques\n"
+                + "🔴 Espacio Ocupado: " + ocupado + " bloques (" + String.format("%.1f", porcentajeUso) + "%)\n"
+                + "🟢 Espacio Libre: " + libre + " bloques\n"
+                + "📄 Total de Archivos: " + numArchivos + "\n"
+                + "📁 Total de Carpetas: " + numCarpetas;
+    }
+
+    private int contarArchivosRec(Directorio dir) {
+        int total = dir.getArchivos().getTamano();
+        ListaEnlazada<Directorio> subdirs = dir.getSubdirectorios();
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            total += contarArchivosRec(subdirs.obtener(i));
+        }
+        return total;
+    }
+
+    private int contarDirectoriosRec(Directorio dir) {
+        int total = 1;
+        ListaEnlazada<Directorio> subdirs = dir.getSubdirectorios();
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            total += contarDirectoriosRec(subdirs.obtener(i));
+        }
+        return total;
+    }
+
+    // =========================================================
+    // JSON
+    // =========================================================
+
+    private void agregarArchivosAlJsonRecursivo(Directorio dir, JsonObject systemFiles) {
+        ListaEnlazada<Archivo> archivos = dir.getArchivos();
+        for (int i = 0; i < archivos.getTamano(); i++) {
+            Archivo arch = archivos.obtener(i);
+            JsonObject fileObj = new JsonObject();
+            fileObj.addProperty("name", arch.getNombre());
+            fileObj.addProperty("blocks", arch.getTamañoEnBloques());
+            systemFiles.add(String.valueOf(arch.getBloqueInicial()), fileObj);
+        }
+
+        ListaEnlazada<Directorio> subdirs = dir.getSubdirectorios();
+        for (int i = 0; i < subdirs.getTamano(); i++) {
+            agregarArchivosAlJsonRecursivo(subdirs.obtener(i), systemFiles);
         }
     }
+
     public String exportarAJson(String rutaArchivo) {
         try {
-            // 1. Creamos un arreglo JSON donde guardaremos los archivos
-            JsonArray listaArchivosJson = new JsonArray();
-            
-            // 2. Obtenemos los archivos de tu directorio raíz
-            estructuras.ListaEnlazada<modelo.Archivo> archivos = directorioRaiz.getArchivos();
-            
-            // 3. Recorremos la lista y metemos cada archivo al JSON
-            for (int i = 0; i < archivos.getTamano(); i++) {
-                modelo.Archivo arch = archivos.obtener(i);
-                
-                JsonObject archivoJson = new JsonObject();
-                archivoJson.addProperty("nombre", arch.getNombre());
-                archivoJson.addProperty("bloqueInicial", arch.getBloqueInicial());
-                
-                archivoJson.addProperty("tamano", arch.getTamañoEnBloques()); 
-                // -------------------------------------------
-                
-                listaArchivosJson.add(archivoJson);
+            JsonObject raiz = new JsonObject();
+            raiz.addProperty("initial_head", this.posicionCabeza);
+
+            JsonObject systemFiles = new JsonObject();
+            agregarArchivosAlJsonRecursivo(directorioRaiz, systemFiles);
+            raiz.add("system_files", systemFiles);
+
+            raiz.add("requests", new JsonArray());
+
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            try (FileWriter writer = new FileWriter(rutaArchivo)) {
+                gson.toJson(raiz, writer);
             }
 
-            // 4. Configuramos Gson para que el archivo se vea bonito (con saltos de línea)
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            
-            // 5. Escribimos el archivo en la computadora
-            try (FileWriter writer = new FileWriter(rutaArchivo)) {
-                gson.toJson(listaArchivosJson, writer);
-            }
-            
             return "✅ Estado guardado correctamente en:\n" + rutaArchivo;
-            
         } catch (Exception e) {
             e.printStackTrace();
             return "❌ Error al guardar JSON: " + e.getMessage();
         }
     }
-    
+
+    private void reiniciarEstadoLogico() {
+        this.disco = new Disco(100);
+        this.directorioRaiz = new Directorio("raiz");
+        this.colaProcesos = new Cola<>();
+        this.journal = new ListaEnlazada<>();
+        this.simularFallo = false;
+    }
+
+    private String resolverNombreDesdePos(int pos) {
+        Archivo arch = buscarArchivoPorBloqueInicial(pos);
+        return (arch != null) ? arch.getNombre() : null;
+    }
+
     public String importarDeJson(String rutaArchivo) {
         try (FileReader reader = new FileReader(rutaArchivo)) {
+            reiniciarEstadoLogico();
+
             JsonObject raiz = JsonParser.parseReader(reader).getAsJsonObject();
 
-            // 1. Cargar la posición inicial del cabezal
             if (raiz.has("initial_head")) {
                 this.posicionCabeza = raiz.get("initial_head").getAsInt();
                 imprimirEnLogVisual("📍 Cabezal movido a la posición: " + posicionCabeza);
             }
 
-            // 2. Cargar los Archivos del Sistema (Se crean directo en disco sin pasar por la cola)
             if (raiz.has("system_files")) {
                 JsonObject sysFiles = raiz.getAsJsonObject("system_files");
                 for (String key : sysFiles.keySet()) {
                     JsonObject fileObj = sysFiles.getAsJsonObject(key);
                     String name = fileObj.get("name").getAsString();
                     int blocks = fileObj.get("blocks").getAsInt();
-                    
-                    this.crearArchivo(name, blocks, "admin");
+                    int bloqueInicial = Integer.parseInt(key);
+                    this.crearArchivoForzado(name, blocks, bloqueInicial, "admin");
                 }
                 imprimirEnLogVisual("📂 System Files cargados correctamente.");
             }
 
-            // 3. Encolar las solicitudes (requests) para que las atienda el Planificador
             if (raiz.has("requests")) {
                 JsonArray requests = raiz.getAsJsonArray("requests");
                 for (JsonElement req : requests) {
                     JsonObject reqObj = req.getAsJsonObject();
                     String op = reqObj.get("op").getAsString().toUpperCase();
-                    
-                    // Si el JSON trae 'name', lo usamos. Si trae 'pos', lo adaptamos.
+
                     int pos = reqObj.has("pos") ? reqObj.get("pos").getAsInt() : 0;
-                    String nombreArchivo = reqObj.has("name") ? reqObj.get("name").getAsString() : "Archivo_" + pos;
+                    String nombreArchivo = reqObj.has("name")
+                            ? reqObj.get("name").getAsString()
+                            : resolverNombreDesdePos(pos);
 
                     if (op.equals("CREATE")) {
                         int size = reqObj.has("size") ? reqObj.get("size").getAsInt() : 1;
+                        if (nombreArchivo == null || nombreArchivo.isBlank()) {
+                            nombreArchivo = "nuevo_" + contadorProcesos + ".txt";
+                        }
                         encolarSolicitudCreacion(nombreArchivo, size);
+
                     } else if (op.equals("DELETE")) {
-                        encolarSolicitudEliminacion(nombreArchivo);
-                    } else if (op.equals("READ") || op.equals("UPDATE")) {
-                        Proceso p = new Proceso("P" + contadorProcesos++, op, nombreArchivo, pos, 0);
-                        p.setEstado("Listo");
-                        colaProcesos.encolar(p);
+                        if (nombreArchivo != null) {
+                            encolarSolicitudEliminacion(nombreArchivo);
+                        } else {
+                            imprimirEnLogVisual("⚠️ DELETE ignorado: no se encontró archivo para pos=" + pos);
+                        }
+
+                    } else if (op.equals("READ")) {
+                        if (nombreArchivo != null) {
+                            encolarSolicitudLectura(nombreArchivo);
+                        } else {
+                            imprimirEnLogVisual("⚠️ READ ignorado: no se encontró archivo para pos=" + pos);
+                        }
+
+                    } else if (op.equals("UPDATE")) {
+                        if (nombreArchivo != null) {
+                            // El Planificador actual no ejecuta UPDATE real todavía.
+                            Proceso p = new Proceso("P" + contadorProcesos++, "UPDATE", nombreArchivo, pos, 0);
+                            p.setEstado("Listo");
+                            colaProcesos.encolar(p);
+                            imprimirEnLogVisual("⚠️ UPDATE cargado en cola para '" + nombreArchivo + "'. Requiere Planificador corregido para aplicar el cambio real.");
+                        } else {
+                            imprimirEnLogVisual("⚠️ UPDATE ignorado: no se encontró archivo para pos=" + pos);
+                        }
                     }
                 }
                 actualizarColaVisual();
             }
 
+            refrescarPantallaCompleta();
             return "✅ JSON de prueba cargado e inicializado.";
 
         } catch (Exception e) {
@@ -404,18 +618,17 @@ public class GestorArchivos {
             return "❌ Error al leer el JSON: Verifica la estructura.\nDetalle: " + e.getMessage();
         }
     }
-    
+
+
     public void recuperarSistemaDespuesDeFallo() {
         imprimirEnLogVisual("🔄 INICIANDO RECUPERACIÓN DEL SISTEMA (JOURNALING)...");
-        
-        // 1. Revisamos la bitácora buscando operaciones PENDIENTES
+
         for (int i = 0; i < journal.getTamano(); i++) {
             String log = journal.obtener(i);
-            
+
             if (log.startsWith("PENDIENTE: CREAR")) {
                 String nombreArchivo = log.replace("PENDIENTE: CREAR ", "").trim();
-                
-                // 2. Buscamos si existe la confirmación más adelante
+
                 boolean confirmado = false;
                 for (int j = i + 1; j < journal.getTamano(); j++) {
                     if (journal.obtener(j).equals("CONFIRMADA: CREAR " + nombreArchivo)) {
@@ -423,8 +636,7 @@ public class GestorArchivos {
                         break;
                     }
                 }
-                
-                // 3. ¡Si no está confirmado, hacemos UNDO (Deshacer)!
+
                 if (!confirmado) {
                     imprimirEnLogVisual("⚠️ Detectada creación incompleta de '" + nombreArchivo + "'. Aplicando UNDO...");
                     boolean borrado = eliminarArchivo(nombreArchivo);
@@ -434,20 +646,54 @@ public class GestorArchivos {
                 }
             }
         }
-        
-        // 4. Limpiamos la bandera de fallo y la bitácora para empezar de nuevo
+
         this.simularFallo = false;
-        this.journal = new estructuras.ListaEnlazada<>();
-        
-        // 5. Reiniciamos el motor del disco (El planificador se había muerto por el break)
+        this.journal = new ListaEnlazada<>();
+
         this.planificador = new Planificador(this);
         this.planificador.start();
-        
+
         imprimirEnLogVisual("🚀 Sistema recuperado y en línea.");
         refrescarPantallaCompleta();
     }
-    
-    public interfaz.VentanaPrincipal getVentana() {
-        return this.ventana;
+
+
+    public boolean crearArchivoForzado(String nombre, int tamano, int bloqueInicial, String propietario) {
+        if (nombre == null || nombre.isBlank() || tamano <= 0 || bloqueInicial < 0) {
+            return false;
+        }
+
+        Bloque[] bloquesReales = disco.getBloques();
+
+        if (bloqueInicial + tamano > bloquesReales.length) {
+            return false;
+        }
+
+        for (int i = 0; i < tamano; i++) {
+            int actual = bloqueInicial + i;
+            if (!bloquesReales[actual].isLibre()) {
+                return false;
+            }
+        }
+
+        int bloqueAnterior = -1;
+        for (int i = 0; i < tamano; i++) {
+            int actual = bloqueInicial + i;
+
+            if (bloqueAnterior != -1) {
+                bloquesReales[bloqueAnterior].setSiguienteBloque(actual);
+            }
+
+            bloquesReales[actual].setLibre(false);
+            bloquesReales[actual].setArchivoAsignado(nombre);
+            bloquesReales[actual].setContenido("Datos sistema: " + nombre);
+            bloquesReales[actual].setSiguienteBloque(-1);
+
+            bloqueAnterior = actual;
+        }
+
+        Archivo nuevoArchivo = new Archivo(nombre, tamano, bloqueInicial, propietario);
+        directorioRaiz.agregarArchivo(nuevoArchivo);
+        return true;
     }
 }
