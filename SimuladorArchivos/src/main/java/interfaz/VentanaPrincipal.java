@@ -50,7 +50,7 @@ public class VentanaPrincipal extends JFrame {
     private JLabel lblEspacioLibre;
 
     public VentanaPrincipal() {
-        super("Simulador de Sistema de Archivos OS - [MODERNO]");
+        super("Simulador de Sistema de Archivos OS");
         
         // 1. INICIALIZAMOS EL CONTROLADOR (El cerebro)
         this.gestor = new GestorArchivos();
@@ -261,7 +261,6 @@ public class VentanaPrincipal extends JFrame {
 
         tabs.addTab("Simulación de Disco", crearPanelDiscoMap());
         tabs.addTab("Tabla FAT", crearPanelTablaAsignacion());
-        tabs.addTab("Rendimiento", crearPanelCostoCache());
         
         return tabs;
     }
@@ -738,6 +737,15 @@ public class VentanaPrincipal extends JFrame {
             llenarTablaRecursiva(subdirs.obtener(i));
         }
     }
+    
+    public void escribirLog(String mensaje) {
+    // Usamos invokeLater aquí para que el texto aparezca de inmediato sin trabar el programa
+    SwingUtilities.invokeLater(() -> {
+        areaLog.append("» " + mensaje + "\n");
+        // Esto hace que el scroll baje automáticamente al final
+        areaLog.setCaretPosition(areaLog.getDocument().getLength());
+    });
+}
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
