@@ -6,6 +6,11 @@ import modelo.Directorio;
 import modelo.Disco;
 import estructuras.Cola;
 import modelo.Proceso;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import java.io.FileWriter;
 
 public class GestorArchivos {
     
@@ -298,6 +303,44 @@ public class GestorArchivos {
     public void refrescarPantallaCompleta() {
         if (this.ventana != null) {
             this.ventana.actualizarPantallaCompleta();
+        }
+    }
+    public String exportarAJson(String rutaArchivo) {
+        try {
+            // 1. Creamos un arreglo JSON donde guardaremos los archivos
+            JsonArray listaArchivosJson = new JsonArray();
+            
+            // 2. Obtenemos los archivos de tu directorio raíz
+            estructuras.ListaEnlazada<modelo.Archivo> archivos = directorioRaiz.getArchivos();
+            
+            // 3. Recorremos la lista y metemos cada archivo al JSON
+            for (int i = 0; i < archivos.getTamano(); i++) {
+                modelo.Archivo arch = archivos.obtener(i);
+                
+                JsonObject archivoJson = new JsonObject();
+                archivoJson.addProperty("nombre", arch.getNombre());
+                archivoJson.addProperty("bloqueInicial", arch.getBloqueInicial());
+                
+                // NOTA: Si tu clase Archivo tiene getTamano() u otros datos, 
+                // puedes agregarlos aquí así:
+                // archivoJson.addProperty("tamano", arch.getTamano()); 
+                
+                listaArchivosJson.add(archivoJson);
+            }
+
+            // 4. Configuramos Gson para que el archivo se vea bonito (con saltos de línea)
+            Gson gson = new GsonBuilder().setPrettyPrinting().create();
+            
+            // 5. Escribimos el archivo en la computadora
+            try (FileWriter writer = new FileWriter(rutaArchivo)) {
+                gson.toJson(listaArchivosJson, writer);
+            }
+            
+            return "✅ Estado guardado correctamente en:\n" + rutaArchivo;
+            
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "❌ Error al guardar JSON: " + e.getMessage();
         }
     }
 }
